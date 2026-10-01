@@ -1,0 +1,22 @@
+# Python virtual environment (recreate it with: python -m venv .venv)
+.venv/
+
+# Python bytecode caches (Python regenerates these automatically)
+__pycache__/
+*.pyc
+
+# pytest's cache of the last run
+.pytest_cache/
+
+# Secrets: API keys live here and must never be committed
+.env
+
+# Agent run traces and outputs (generated, can be large)
+runs/
+
+# macOS Finder metadata
+.DS_Store
+
+# Personal files kept local only: assistant instructions and my learning log
+CLAUDE.md
+LEARNING.md

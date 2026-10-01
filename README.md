@@ -1,2 +1,1 @@
-# sandbox
-a fixer you can measure
+A sandboxed agent that repairs code and SQL, with a measured eval suite.
