@@ -17,6 +17,3 @@ runs/
 # macOS Finder metadata
 .DS_Store
 
-# Personal files kept local only: assistant instructions and my learning log
-CLAUDE.md
-LEARNING.md
