@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repair_agent"
+version = "0.1.0"
+description = "A sandboxed agent that repairs code and SQL, with a measured eval suite."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv",
+    "openai",
+    "pytest",
+]

@@ -5,6 +5,9 @@
 __pycache__/
 *.pyc
 
+# Build metadata that pip install -e generates
+*.egg-info/
+
 # pytest's cache of the last run
 .pytest_cache/
 
