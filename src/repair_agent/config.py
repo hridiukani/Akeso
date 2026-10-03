@@ -56,7 +56,8 @@ class Settings:
 def load_settings(env_file: str | Path = ".env") -> Settings:
     """Read settings from real environment variables, falling back to the .env file.
 
-    Raises ConfigError if PROVIDER is unknown or the active provider's key or model is missing.
+    Raises ConfigError if PROVIDER is unknown, the active provider's key or model is missing,
+    or the active model has no price in PRICES.
     """
     # dotenv_values reads the file into a dict without copying keys into os.environ,
     # so child processes we start later don't inherit them.
@@ -78,6 +79,14 @@ def load_settings(env_file: str | Path = ".env") -> Settings:
         raise ConfigError(
             f"PROVIDER={provider} needs {' and '.join(missing)}. "
             "Add the missing value(s) to .env (see .env.example)."
+        )
+
+    # Check now, before any API call spends money, rather than when cost is first computed.
+    model = get(f"{prefix}_MODEL")
+    if model not in PRICES:
+        raise ConfigError(
+            f"{prefix}_MODEL={model!r} has no entry in PRICES. "
+            "Add its price to PRICES in src/repair_agent/config.py, or fix the model name."
         )
 
     return Settings(
