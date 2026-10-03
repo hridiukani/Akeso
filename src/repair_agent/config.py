@@ -17,6 +17,31 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True)
+class ModelPrice:
+    """USD per million tokens (MTok)."""
+
+    input_per_mtok: float
+    output_per_mtok: float
+
+
+# Keyed by the exact model name sent to the API. A model missing here makes cost
+# calculation fail loudly, so a run can't silently report $0.
+# Anthropic prices checked 2026-10-03 at https://platform.claude.com/docs/en/about-claude/pricing
+# Groq models are 0 because we use Groq's free tier.
+PRICES: dict[str, ModelPrice] = {
+    # Groq (free tier)
+    "openai/gpt-oss-120b": ModelPrice(0.0, 0.0),
+    "openai/gpt-oss-20b": ModelPrice(0.0, 0.0),
+    "llama-3.3-70b-versatile": ModelPrice(0.0, 0.0),
+    "llama-3.1-8b-instant": ModelPrice(0.0, 0.0),
+    # Anthropic
+    "claude-haiku-4-5": ModelPrice(1.0, 5.0),
+    "claude-haiku-4-5-20251001": ModelPrice(1.0, 5.0),
+    "claude-sonnet-5": ModelPrice(2.0, 10.0),
+}
+
+
+@dataclass(frozen=True)
 class Settings:
     """Settings for one run."""
 
