@@ -22,8 +22,7 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 1. Append ONE detailed LEARNING.md entry for the whole topic, in the format below. It must be detailed enough that I could learn the topic from it without this chat.
 2. Update the Project map in LEARNING.md and add new terms to the Glossary.
 3. Never rewrite or delete earlier entries unless I ask you to fix a mistake.
-4. Suggest a docs: commit for the LEARNING.md update.
-5. Give me 3 interview-style quiz questions about the topic. Wait for my answers, then tell me what I got right and wrong.
+4. Give me 3 interview-style quiz questions about the topic. Wait for my answers, then tell me what I got right and wrong.
 
 ## LEARNING.md entry format
 ### Topic N: <name>
