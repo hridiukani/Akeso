@@ -1,0 +1,64 @@
+"""Load settings from .env, requiring only the active provider's key and model."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from dotenv import dotenv_values
+
+SUPPORTED_PROVIDERS = ("groq", "anthropic")
+DEFAULT_PROVIDER = "groq"
+
+
+class ConfigError(Exception):
+    """Raised when settings are missing or invalid. Messages never include secret values."""
+
+
+@dataclass(frozen=True)
+class Settings:
+    """Settings for one run."""
+
+    provider: str
+    groq_model: str | None
+    anthropic_model: str | None
+    # repr=False so printing or logging a Settings object never shows the keys.
+    groq_api_key: str | None = field(default=None, repr=False)
+    anthropic_api_key: str | None = field(default=None, repr=False)
+
+
+def load_settings(env_file: str | Path = ".env") -> Settings:
+    """Read settings from real environment variables, falling back to the .env file.
+
+    Raises ConfigError if PROVIDER is unknown or the active provider's key or model is missing.
+    """
+    # dotenv_values reads the file into a dict without copying keys into os.environ,
+    # so child processes we start later don't inherit them.
+    file_values = dotenv_values(env_file)
+
+    def get(name: str) -> str | None:
+        value = os.environ.get(name) or file_values.get(name) or ""
+        return value.strip() or None
+
+    provider = (get("PROVIDER") or DEFAULT_PROVIDER).lower()
+    if provider not in SUPPORTED_PROVIDERS:
+        raise ConfigError(
+            f"PROVIDER must be one of {', '.join(SUPPORTED_PROVIDERS)}, got {provider!r}."
+        )
+
+    prefix = provider.upper()
+    missing = [name for name in (f"{prefix}_API_KEY", f"{prefix}_MODEL") if not get(name)]
+    if missing:
+        raise ConfigError(
+            f"PROVIDER={provider} needs {' and '.join(missing)}. "
+            "Add the missing value(s) to .env (see .env.example)."
+        )
+
+    return Settings(
+        provider=provider,
+        groq_model=get("GROQ_MODEL"),
+        anthropic_model=get("ANTHROPIC_MODEL"),
+        groq_api_key=get("GROQ_API_KEY"),
+        anthropic_api_key=get("ANTHROPIC_API_KEY"),
+    )
