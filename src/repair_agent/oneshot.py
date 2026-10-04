@@ -22,8 +22,15 @@ _FILE_BLOCK = re.compile(
     re.MULTILINE | re.DOTALL,
 )
 
+# Headers for the prompt we send. Distinct from pytest's "=====" lines in the failure
+# output, and from the reply markers above, so the model can tell the three apart.
+INPUT_FILE_HEADER = "### FILE "
+INPUT_OUTPUT_HEADER = "### FAILING TEST OUTPUT"
+
 SYSTEM_PROMPT = f"""You fix bugs in small Python projects.
-You will see the project's source files, its test files, and the output of the failing tests.
+You will see the project's source files and its test files, each under a
+"{INPUT_FILE_HEADER}<path>" header, then the output of the failing tests under
+"{INPUT_OUTPUT_HEADER}".
 The tests are correct. Fix the code under src/ so the tests pass. Do not change the tests.
 
 Reply with the complete corrected contents of exactly one file under src/, using exactly
@@ -105,8 +112,8 @@ def build_prompt(workspace: Path, failure_output: str) -> str:
     for folder in ("src", "tests"):
         for path in sorted((workspace / folder).rglob("*.py")):
             rel = path.relative_to(workspace).as_posix()
-            sections.append(f"===== {rel} =====\n{path.read_text(encoding='utf-8')}")
-    sections.append(f"===== failing test output =====\n{trim_output(failure_output)}")
+            sections.append(f"{INPUT_FILE_HEADER}{rel}\n{path.read_text(encoding='utf-8')}")
+    sections.append(f"{INPUT_OUTPUT_HEADER}\n{trim_output(failure_output)}")
     return "\n\n".join(sections)
 
 
