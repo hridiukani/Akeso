@@ -52,6 +52,14 @@ class Settings:
     groq_api_key: str | None = field(default=None, repr=False)
     anthropic_api_key: str | None = field(default=None, repr=False)
 
+    @property
+    def model(self) -> str:
+        """The model name for the active provider."""
+        model = self.groq_model if self.provider == "groq" else self.anthropic_model
+        if model is None:
+            raise ConfigError(f"No model set for provider {self.provider!r}.")
+        return model
+
 
 def load_settings(env_file: str | Path = ".env") -> Settings:
     """Read settings from real environment variables, falling back to the .env file.
