@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -10,6 +11,11 @@ from pathlib import Path
 
 CHECK_TIMEOUT_SECONDS = 60
 DEFAULT_OUTPUT_LIMIT = 4000
+
+# The only parent variables task code may see. Everything else (API keys, tokens,
+# personal settings) is left out. PATH lets tests find programs; SYSTEMROOT is required
+# for Python to start on Windows; TEMP/TMP let pytest's tmp_path work.
+_PASSTHROUGH_ENV_VARS = ("PATH", "SYSTEMROOT", "TEMP", "TMP")
 
 
 @dataclass(frozen=True)
@@ -38,6 +44,7 @@ def run_checks(workdir: str | Path, timeout: float = CHECK_TIMEOUT_SECONDS) -> C
         completed = subprocess.run(
             command,
             cwd=workdir,
+            env=minimal_env(),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,  # merge so errors appear next to the output they belong to
             text=True,
@@ -62,6 +69,18 @@ def run_checks(workdir: str | Path, timeout: float = CHECK_TIMEOUT_SECONDS) -> C
         output=completed.stdout,
         duration=time.perf_counter() - start,
     )
+
+
+def minimal_env() -> dict[str, str]:
+    """Environment for task code: an allowlist of parent variables plus fixed settings.
+
+    An allowlist (not a blocklist) means a new secret added to the parent environment
+    is hidden by default.
+    """
+    env = {name: os.environ[name] for name in _PASSTHROUGH_ENV_VARS if name in os.environ}
+    env["PYTHONIOENCODING"] = "utf-8"  # matches how we decode the output
+    env["PYTHONDONTWRITEBYTECODE"] = "1"  # keep __pycache__ out of the workspace
+    return env
 
 
 def trim_output(output: str, limit: int = DEFAULT_OUTPUT_LIMIT) -> str:
