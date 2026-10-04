@@ -13,3 +13,7 @@ dependencies = [
     "openai",
     "pytest",
 ]
+
+[tool.pytest.ini_options]
+# Only the harness's own tests. Task folders contain deliberately failing tests.
+testpaths = ["tests"]
