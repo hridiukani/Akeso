@@ -1,4 +1,4 @@
-"""Tests for run_checks isolation."""
+"""Tests for run_checks: pass/fail detection, timeouts, and environment isolation."""
 
 from pathlib import Path
 
@@ -8,6 +8,45 @@ from repair_agent.checks import run_checks
 
 PROBE_NAME = "REPAIR_AGENT_TEST_SECRET"
 PROBE_VALUE = "fake-secret-value-123"
+
+
+def write_project(folder: Path, test_code: str) -> Path:
+    """Create a tiny project with a single test file and return its folder."""
+    (folder / "test_tiny.py").write_text(test_code)
+    return folder
+
+
+def test_passing_project(tmp_path: Path) -> None:
+    project = write_project(tmp_path, "def test_ok():\n    assert 1 + 1 == 2\n")
+
+    result = run_checks(project)
+
+    assert result.passed
+    assert result.exit_code == 0
+    assert "1 passed" in result.output
+    assert result.duration > 0
+
+
+def test_failing_project(tmp_path: Path) -> None:
+    project = write_project(tmp_path, "def test_broken():\n    total = 1 + 1\n    assert total == 3\n")
+
+    result = run_checks(project)
+
+    assert not result.passed
+    assert result.exit_code == 1  # pytest's code for "some tests failed"
+    assert "1 failed" in result.output
+    assert "assert 2 == 3" in result.output  # failure details are captured for the model
+
+
+def test_timeout_counts_as_failure(tmp_path: Path) -> None:
+    project = write_project(tmp_path, "import time\ndef test_slow():\n    time.sleep(30)\n")
+
+    result = run_checks(project, timeout=1)
+
+    assert not result.passed
+    assert result.exit_code is None
+    assert "timed out after 1 seconds" in result.output
+    assert result.duration < 15  # killed early, not left to run its full 30 seconds
 
 
 def test_parent_env_var_is_not_visible_to_task_code(
