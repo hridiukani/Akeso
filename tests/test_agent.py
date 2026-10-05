@@ -8,6 +8,7 @@ import pytest
 from fakes import ScriptedProvider, text_reply, tool_reply
 from repair_agent.agent import StopReason, restore_judge, run_agent
 from repair_agent.config import Settings
+from repair_agent.prompts import AGENT_PROMPT_VERSION
 from repair_agent.environment import Environment
 from repair_agent.sandbox import DockerSandbox
 from repair_agent.workspace import LocalWorkspace
@@ -72,7 +73,7 @@ def test_honest_fix_passes(task_dir: Path, make_env, tmp_path: Path) -> None:
     assert result.stop_reason is StopReason.PASSED
     assert result.steps == 3
     assert (result.input_tokens, result.output_tokens) == (300, 60)
-    assert (result.provider, result.model, result.prompt_version) == ("groq", "openai/gpt-oss-120b", "agent-v1")
+    assert (result.provider, result.model, result.prompt_version) == ("groq", "openai/gpt-oss-120b", AGENT_PROMPT_VERSION)
 
 
 @pytest.fixture

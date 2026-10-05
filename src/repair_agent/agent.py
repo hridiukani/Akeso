@@ -21,7 +21,7 @@ from repair_agent.llm.types import Message
 from repair_agent.paths import is_excluded_task_file
 from repair_agent.prompts import AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT, build_first_message
 from repair_agent.sandbox import DockerSandbox
-from repair_agent.tools import TOOL_DEFINITIONS, execute_tool
+from repair_agent.tools import execute_tool, tool_definitions
 from repair_agent.trace import DEFAULT_TRACE_DIR, TraceWriter, new_run_id, trace_path
 
 # Files that define how the tests run. Anywhere in the task, these belong to the judge.
@@ -114,6 +114,7 @@ def run_agent(
     run_id = run_id or new_run_id()
     path = trace_path(Path(trace_dir), run_id, task_dir.name)
     stuck = RepeatedFailureDetector(limits.repeated_failure_limit)
+    tools = tool_definitions(env.kind)  # descriptions must match where commands really run
     steps = input_tokens = output_tokens = 0
     cost = 0.0
     stop, detail = StopReason.ERROR, ""
@@ -156,7 +157,7 @@ def run_agent(
                     if steps >= limits.max_steps:
                         stop = StopReason.MAX_STEPS
                         break
-                    response = provider.complete(AGENT_SYSTEM_PROMPT, messages, tools=TOOL_DEFINITIONS)
+                    response = provider.complete(AGENT_SYSTEM_PROMPT, messages, tools=tools)
                     steps += 1
                     input_tokens += response.usage.input_tokens
                     output_tokens += response.usage.output_tokens

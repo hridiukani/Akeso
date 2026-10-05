@@ -8,6 +8,7 @@ import pytest
 from fakes import FakeEnvironment, ScriptedProvider, text_reply, tool_reply
 from repair_agent.agent import StopReason, run_agent
 from repair_agent.config import AgentLimits, Settings
+from repair_agent.prompts import AGENT_PROMPT_VERSION
 from repair_agent.trace import TraceWriter, new_run_id, read_trace, trace_path
 
 FAKE_KEY = "gsk-fake-key-that-must-never-be-traced"
@@ -77,7 +78,7 @@ def test_agent_run_records_every_event(task_dir: Path, tmp_path: Path) -> None:
 
     start = events[0]
     assert start["provider"] == "groq" and start["model"] == "openai/gpt-oss-120b"
-    assert start["environment"] == "fake" and start["prompt_version"] == "agent-v1"
+    assert start["environment"] == "fake" and start["prompt_version"] == AGENT_PROMPT_VERSION
     assert start["limits"] == {"max_steps": 20, "max_cost_usd": 1.0, "max_total_tokens": 300000, "repeated_failure_limit": 3}
 
     first_call = events[2]

@@ -125,6 +125,7 @@ class ScriptedProvider:
     def __init__(self, responses: Sequence[ModelResponse]) -> None:
         self.responses = list(responses)
         self.calls: list[list[Message]] = []
+        self.tools: list[list[ToolDefinition]] = []  # the tool definitions sent with each call
 
     def complete(
         self,
@@ -133,6 +134,7 @@ class ScriptedProvider:
         tools: Sequence[ToolDefinition] | None = None,
     ) -> ModelResponse:
         self.calls.append(list(messages))
+        self.tools.append(list(tools or []))
         if len(self.calls) > len(self.responses):
             raise RuntimeError("ScriptedProvider ran out of responses")
         return self.responses[len(self.calls) - 1]

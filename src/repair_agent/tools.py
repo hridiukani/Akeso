@@ -204,25 +204,47 @@ APPLY_EDIT_TOOL = ToolDefinition(
     },
 )
 
-RUN_COMMAND_TOOL = ToolDefinition(
-    name="run_command",
-    description=(
-        "Run a shell command in the project root inside an isolated sandbox and return its exit "
-        f"code and output (the end of long output is kept). Commands are killed after "
-        f"{COMMAND_TIMEOUT_SECONDS} seconds. There is no network access, so installing packages "
-        "will fail. Use it to inspect the project or run Python, e.g. "
-        "'python -c \"from stats import mean; print(mean([1, 2]))\"'. To run the task's tests, "
-        "use run_checks instead."
+# What run_command may truthfully claim about where commands run, per environment kind.
+# The model plans around these facts, so they must be accurate for the environment in use.
+_RUN_COMMAND_WHERE = {
+    "docker": (
+        "inside an isolated Docker sandbox (Linux, sh shell). There is no network access, so "
+        "installing packages will fail."
     ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "command": {"type": "string", "description": "The shell command to run, e.g. 'python -m pytest -q tests/test_stats.py'."},
+    "local": (
+        "directly on this computer, in a temporary copy of the project, through the system "
+        "shell (cmd.exe on Windows). This is not an isolated sandbox: only use commands that "
+        "read or run the project, don't install packages, and don't touch anything outside "
+        "the project folder."
+    ),
+}
+_RUN_COMMAND_WHERE_DEFAULT = "in the project's environment."
+
+
+def run_command_tool(env_kind: str) -> ToolDefinition:
+    """The run_command definition, describing where commands really run for env_kind."""
+    where = _RUN_COMMAND_WHERE.get(env_kind, _RUN_COMMAND_WHERE_DEFAULT)
+    return ToolDefinition(
+        name="run_command",
+        description=(
+            f"Run a shell command in the project root and return its exit code and output (the "
+            f"end of long output is kept). Commands run {where} Commands are killed after "
+            f"{COMMAND_TIMEOUT_SECONDS} seconds. Use it to inspect the project or run Python, e.g. "
+            "'python -c \"from stats import mean; print(mean([1, 2]))\"'. To run the task's tests, "
+            "use run_checks instead."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "The shell command to run, e.g. 'python -m pytest -q tests/test_stats.py'."},
+            },
+            "required": ["command"],
+            "additionalProperties": False,
         },
-        "required": ["command"],
-        "additionalProperties": False,
-    },
-)
+    )
+
+
+RUN_COMMAND_TOOL = run_command_tool("docker")
 
 RUN_CHECKS_TOOL = ToolDefinition(
     name="run_checks",
@@ -234,12 +256,15 @@ RUN_CHECKS_TOOL = ToolDefinition(
     input_schema={"type": "object", "properties": {}, "additionalProperties": False},
 )
 
-TOOL_DEFINITIONS = [READ_FILE_TOOL, APPLY_EDIT_TOOL, RUN_COMMAND_TOOL, RUN_CHECKS_TOOL]
+def tool_definitions(env_kind: str) -> list[ToolDefinition]:
+    """The tool definitions to send the model, with descriptions accurate for env_kind."""
+    return [READ_FILE_TOOL, APPLY_EDIT_TOOL, run_command_tool(env_kind), RUN_CHECKS_TOOL]
 
 
 # --- executing a model's tool call ---
 
-# name -> (definition, function). Each function takes (env, **arguments).
+# name -> (definition, function). Each function takes (env, **arguments). The schemas
+# are the same in every environment, so the Docker definitions serve for validation.
 _REGISTRY: dict[str, tuple[ToolDefinition, Callable[..., ToolResult]]] = {
     READ_FILE_TOOL.name: (READ_FILE_TOOL, read_file),
     APPLY_EDIT_TOOL.name: (APPLY_EDIT_TOOL, apply_edit),

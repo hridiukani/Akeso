@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from repair_agent.checks import trim_output
 
-AGENT_PROMPT_VERSION = "agent-v1"
+AGENT_PROMPT_VERSION = "agent-v2"  # v2: run_command no longer claims "no network" (wrong locally)
 
 AGENT_SYSTEM_PROMPT = """\
 You are a careful software engineer fixing a bug in a small Python project.
@@ -28,7 +28,7 @@ Tools:
 - read_file(path): a file's exact contents, or a folder's file list ('.' lists everything).
 - apply_edit(path, old_str, new_str): replace one exact, unique piece of text. Copy old_str
   exactly from read_file output, including indentation.
-- run_command(command): run a shell command in the project folder (no network access).
+- run_command(command): run a shell command in the project folder.
 - run_checks(): run the tests and see PASSED or FAILED with the output.
 
 When run_checks reports PASSED, reply with one sentence describing the fix and stop calling

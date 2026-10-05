@@ -191,3 +191,14 @@ def test_already_passing_task_never_calls_the_model(task_dir: Path, tmp_path: Pa
     assert result.stop_reason is StopReason.ERROR
     assert "task is invalid" in result.detail
     assert provider.calls == []
+
+
+@pytest.mark.parametrize(("kind", "expected"), [("docker", "isolated Docker sandbox"), ("local", "not an isolated sandbox")])
+def test_agent_sends_run_command_description_for_its_environment(task_dir: Path, tmp_path: Path, kind: str, expected: str) -> None:
+    env = FakeEnvironment(checks=judge)
+    env.kind = kind  # behave as if this were that environment
+
+    _, provider, _ = run(task_dir, tmp_path, [tool_reply(FIX), tool_reply(CHECKS)], env=env)
+
+    run_command = next(d for d in provider.tools[0] if d.name == "run_command")
+    assert expected in run_command.description

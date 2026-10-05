@@ -186,14 +186,18 @@ def test_run_checks_fails_then_passes_after_edit(env: Environment) -> None:
 
 
 def test_definitions_match_the_tools() -> None:
-    names = [definition.name for definition in tools.TOOL_DEFINITIONS]
+    names = [definition.name for definition in tools.tool_definitions("docker")]
 
     assert names == ["read_file", "apply_edit", "run_command", "run_checks"]
     for name in names:
         assert callable(getattr(tools, name))
 
 
-@pytest.mark.parametrize("definition", tools.TOOL_DEFINITIONS, ids=lambda d: d.name)
+@pytest.mark.parametrize(
+    "definition",
+    tools.tool_definitions("docker") + [tools.run_command_tool("local")],
+    ids=lambda d: d.name,
+)
 def test_definition_schemas_are_well_formed(definition) -> None:
     schema = definition.input_schema
 
@@ -204,3 +208,38 @@ def test_definition_schemas_are_well_formed(definition) -> None:
     for prop in schema["properties"].values():
         assert prop["type"] == "string"
         assert prop["description"]
+
+
+# --- environment-specific descriptions ---
+
+
+def test_docker_run_command_claims_isolation_and_no_network() -> None:
+    description = tools.run_command_tool("docker").description
+
+    assert "isolated Docker sandbox" in description
+    assert "no network access" in description
+
+
+def test_local_run_command_is_honest_about_running_on_the_host() -> None:
+    description = tools.run_command_tool("local").description
+
+    assert "directly on this computer" in description
+    assert "not an isolated sandbox" in description
+    assert "cmd.exe on Windows" in description
+    assert "no network" not in description  # a local run may well have network access
+    assert "isolated Docker" not in description
+
+
+def test_unknown_environment_makes_no_claims() -> None:
+    description = tools.run_command_tool("fake").description
+
+    assert "isolated" not in description and "network" not in description
+
+
+@pytest.mark.parametrize("kind", ["docker", "local"])
+def test_only_run_command_changes_between_environments(kind: str) -> None:
+    by_name = {d.name: d for d in tools.tool_definitions(kind)}
+
+    assert by_name["run_command"] == tools.run_command_tool(kind)
+    assert by_name["read_file"] == tools.READ_FILE_TOOL
+    assert by_name["run_command"].input_schema == tools.RUN_COMMAND_TOOL.input_schema
