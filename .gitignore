@@ -5,6 +5,9 @@
 __pycache__/
 *.pyc
 
+# Package metadata that pip install -e regenerates on every install
+*.egg-info/
+
 # pytest's cache of the last run
 .pytest_cache/
 
