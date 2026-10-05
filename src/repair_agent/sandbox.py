@@ -10,12 +10,14 @@ import io
 import tarfile
 import time
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import TracebackType
 
 import docker
 from docker.errors import DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
+
+from repair_agent.paths import UnsafePathError, safe_relative_path
 
 IMAGE = "repair-agent-code:latest"
 WORKDIR = "/workspace"
@@ -122,6 +124,55 @@ class DockerSandbox:
             return ExecResult(None, f"{output}\n[command timed out after {timeout:g} seconds]")
         return ExecResult(exit_code, output)
 
+    def read_file(self, path: str) -> str:
+        """Return the text of a file, given a path relative to /workspace."""
+        rel = _file_path(path)
+        container = self._require_started()
+        try:
+            stream, _ = container.get_archive(f"{WORKDIR}/{rel}")
+        except NotFound:
+            raise FileNotFoundError(f"{rel} does not exist in {WORKDIR}.") from None
+        with tarfile.open(fileobj=io.BytesIO(b"".join(stream))) as archive:
+            member = archive.next()
+            # get_archive returns links as links, so this also refuses to read through a symlink.
+            if member is None or not member.isfile():
+                raise IsADirectoryError(f"{rel} is not a regular file.")
+            data = archive.extractfile(member).read()
+        return data.decode("utf-8", errors="replace")
+
+    def write_file(self, path: str, content: str) -> None:
+        """Create or overwrite a file (and any missing parent folders) relative to /workspace."""
+        rel = _file_path(path)
+        container = self._require_started()
+        data = content.encode("utf-8")
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w") as archive:
+            # Explicit folder entries so new folders are owned by the sandbox user too.
+            for parent in reversed(rel.parents[:-1]):  # parents[-1] is "." (/workspace itself)
+                archive.addfile(_owned_tarinfo(parent.as_posix(), is_dir=True))
+            info = _owned_tarinfo(rel.as_posix(), is_dir=False)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+        container.put_archive(WORKDIR, buffer.getvalue())
+
+    def list_files(self, path: str = ".") -> list[str]:
+        """Return every file under path (recursively), relative to /workspace, sorted."""
+        rel = safe_relative_path(path)
+        self._require_started()
+        # A list (not a shell string), so the path can't inject extra shell commands.
+        result = self.exec(["find", rel.as_posix(), "-type", "f"], timeout=30)
+        if result.exit_code != 0:
+            if "No such file" in result.output:
+                raise FileNotFoundError(f"{rel} does not exist in {WORKDIR}.")
+            raise SandboxError(f"Listing {rel} failed: {result.output.strip()}")
+        files = (line.removeprefix("./") for line in result.output.splitlines() if line)
+        return sorted(files)
+
+    def _require_started(self) -> Container:
+        if self.container is None:
+            raise SandboxError("Sandbox not started; call start() first.")
+        return self.container
+
     def stop(self) -> None:
         """Remove the container (killing it if running). Safe to call more than once."""
         if self.container is None:
@@ -156,6 +207,25 @@ def _connect() -> docker.DockerClient:
             "then try again."
         ) from error
     return client
+
+
+def _file_path(path: str) -> PurePosixPath:
+    """A safe path that names a file, not /workspace itself."""
+    rel = safe_relative_path(path)
+    if rel == PurePosixPath("."):
+        raise UnsafePathError(f"path {path!r} refers to {WORKDIR} itself, not a file.")
+    return rel
+
+
+def _owned_tarinfo(name: str, is_dir: bool) -> tarfile.TarInfo:
+    """A tar entry owned by the sandbox user, so the agent can edit what we write."""
+    info = tarfile.TarInfo(name)
+    info.type = tarfile.DIRTYPE if is_dir else tarfile.REGTYPE
+    info.uid = info.gid = USER_ID
+    info.uname = info.gname = USER
+    info.mode = 0o755 if is_dir else 0o644
+    info.mtime = int(time.time())
+    return info
 
 
 def _tar_folder(folder: Path) -> bytes:
