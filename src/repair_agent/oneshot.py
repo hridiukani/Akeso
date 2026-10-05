@@ -5,13 +5,14 @@ from __future__ import annotations
 import difflib
 import re
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from repair_agent.checks import run_checks, trim_output
 from repair_agent.config import Settings, load_settings
 from repair_agent.llm.cost import cost_usd
 from repair_agent.llm.provider import Provider, get_provider
 from repair_agent.llm.types import Message, Usage
+from repair_agent.paths import UnsafePathError, safe_relative_path
 from repair_agent.workspace import cleanup_workspace, create_workspace
 
 # Unusual markers rather than ``` fences, because file contents can contain fences.
@@ -131,8 +132,11 @@ def parse_reply(text: str) -> tuple[str, str]:
 
 def resolve_src_path(workspace: Path, rel_path: str) -> Path:
     """Return the workspace file for rel_path, refusing anything that isn't an existing file under src/."""
-    parts = PurePosixPath(rel_path.replace("\\", "/"))
-    if parts.is_absolute() or ".." in parts.parts or not parts.parts or parts.parts[0] != "src":
+    try:
+        parts = safe_relative_path(rel_path)
+    except UnsafePathError:
+        raise ReplyError(f"path {rel_path!r} is not inside src/.") from None
+    if parts.parts[:1] != ("src",):
         raise ReplyError(f"path {rel_path!r} is not inside src/.")
     target = (workspace / parts).resolve()
     # Second line of defence: after resolving, the file must still sit inside workspace/src.
