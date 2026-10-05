@@ -40,6 +40,8 @@ class Environment(Protocol):
     Use as a context manager so the environment is always cleaned up.
     """
 
+    kind: str  # short name recorded in results, e.g. "docker" or "local"
+
     def start(self, task_dir: str | Path) -> None:
         """Copy the task into the environment. The original task folder is never modified."""
         ...

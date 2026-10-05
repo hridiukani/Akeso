@@ -205,6 +205,7 @@ def test_valid_fix_passes(task: Path, spy: SpyWorkspace) -> None:
     assert result.file_path == "src/stats.py"
     assert result.usage == FAKE_USAGE
     assert result.cost_usd == pytest.approx(0.004)
+    assert (result.provider, result.model, result.environment) == ("anthropic", "claude-sonnet-5", "local")
     assert provider.calls == 1
     assert spy.check_runs == 2  # once before the fix, once after
     assert spy.files["src/stats.py"] == FIXED_CODE  # the fix was written to the workspace
@@ -244,6 +245,7 @@ def test_malformed_reply_fails_cleanly(
 
     assert result.reason.startswith("Unusable reply")
     assert result.file_path is None
+    assert result.environment == "local"  # recorded on failures too
     assert_failed_cleanly(result, task, spy)
 
 
@@ -347,4 +349,5 @@ def test_docker_run_fixes_task_without_asking(task: Path, monkeypatch: pytest.Mo
 
     assert result.passed, result.reason
     assert result.reason.startswith("Checks pass")
+    assert result.environment == "docker"
     assert read_all(task) == original

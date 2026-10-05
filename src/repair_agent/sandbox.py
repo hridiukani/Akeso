@@ -47,6 +47,8 @@ class DockerSandbox:
             result = sandbox.exec("python -m pytest -q", timeout=60)
     """
 
+    kind = "docker"
+
     def __init__(
         self,
         image: str = IMAGE,

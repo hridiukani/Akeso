@@ -75,6 +75,8 @@ class LocalWorkspace:
     without Docker.
     """
 
+    kind = "local"
+
     def __init__(self, max_file_bytes: int = 1_000_000) -> None:
         self.max_file_bytes = max_file_bytes
         self.root: Path | None = None

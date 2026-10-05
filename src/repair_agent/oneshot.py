@@ -55,6 +55,9 @@ class OneshotResult:
     reason: str  # human-readable explanation, especially for failures
     usage: Usage
     cost_usd: float
+    provider: str  # e.g. "groq"; recorded so results from different models are never mixed
+    model: str  # exact model name sent to the API
+    environment: str  # "docker" or "local": where the model's code ran
     file_path: str | None = None  # the file the model replaced, if its reply was valid
 
 
@@ -88,12 +91,19 @@ def run_oneshot(
         confirm = isinstance(env, LocalWorkspace)  # only host-side runs need a human check
     no_usage = Usage(input_tokens=0, output_tokens=0)
 
+    def result(
+        passed: bool, reason: str, usage: Usage, cost: float, file_path: str | None = None
+    ) -> OneshotResult:
+        return OneshotResult(
+            passed, reason, usage, cost, settings.provider, settings.model, env.kind, file_path
+        )
+
     with env:
         env.start(task_dir)
         before = env.run_checks()
         if before.passed:
             # Nothing to repair, so don't spend money asking the model.
-            return OneshotResult(False, "Checks already pass before any change; task is invalid.", no_usage, 0.0)
+            return result(False, "Checks already pass before any change; task is invalid.", no_usage, 0.0)
 
         response = provider.complete(
             system=SYSTEM_PROMPT,
@@ -106,16 +116,16 @@ def run_oneshot(
             rel_path, new_content = parse_reply(response.text)
             rel_path = resolve_src_path(env, rel_path)
         except ReplyError as error:
-            return OneshotResult(False, f"Unusable reply: {error}", usage, cost)
+            return result(False, f"Unusable reply: {error}", usage, cost)
 
         if confirm and not _approve(rel_path, env.read_file(rel_path), new_content):
-            return OneshotResult(False, "Change rejected by user; checks not run.", usage, cost, rel_path)
+            return result(False, "Change rejected by user; checks not run.", usage, cost, rel_path)
 
         env.write_file(rel_path, new_content)
         after = env.run_checks()
         summary = _last_line(after.output)
         reason = f"Checks pass: {summary}" if after.passed else f"Checks still fail: {summary}"
-        return OneshotResult(after.passed, reason, usage, cost, rel_path)
+        return result(after.passed, reason, usage, cost, rel_path)
 
 
 def make_environment(mode: Mode) -> Environment:
