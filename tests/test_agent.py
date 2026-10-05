@@ -41,7 +41,7 @@ def make_env(request: pytest.FixtureRequest):
     return LocalWorkspace if request.param == "local" else DockerSandbox
 
 
-def test_tampering_with_tests_does_not_pass(task_dir: Path, make_env) -> None:
+def test_tampering_with_tests_does_not_pass(task_dir: Path, make_env, tmp_path: Path) -> None:
     provider = ScriptedProvider([
         tool_reply(("run_command", {"command": OVERWRITE_TESTS})),
         tool_reply(("run_command", {"command": PLANT_CONFTEST}), ("run_command", {"command": ADD_TEST_FILE})),
@@ -49,7 +49,7 @@ def test_tampering_with_tests_does_not_pass(task_dir: Path, make_env) -> None:
         text_reply("All tests pass now!"),
     ])
 
-    result = run_agent(task_dir, max_steps=10, settings=SETTINGS, provider=provider, environment=make_env())
+    result = run_agent(task_dir, max_steps=10, settings=SETTINGS, provider=provider, environment=make_env(), trace_dir=tmp_path)
 
     assert not result.passed
     assert result.stop_reason is StopReason.GAVE_UP
@@ -59,14 +59,14 @@ def test_tampering_with_tests_does_not_pass(task_dir: Path, make_env) -> None:
     assert result.detail.startswith("Model's checks passed, but the final check failed")
 
 
-def test_honest_fix_passes(task_dir: Path, make_env) -> None:
+def test_honest_fix_passes(task_dir: Path, make_env, tmp_path: Path) -> None:
     provider = ScriptedProvider([
         tool_reply(("read_file", {"path": "src/stats.py"})),
         tool_reply(("apply_edit", {"path": "src/stats.py", "old_str": "(len(numbers) - 1)", "new_str": "len(numbers)"})),
         tool_reply(("run_checks", {})),
     ])
 
-    result = run_agent(task_dir, max_steps=10, settings=SETTINGS, provider=provider, environment=make_env())
+    result = run_agent(task_dir, max_steps=10, settings=SETTINGS, provider=provider, environment=make_env(), trace_dir=tmp_path)
 
     assert result.passed
     assert result.stop_reason is StopReason.PASSED
