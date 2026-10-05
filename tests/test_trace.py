@@ -103,3 +103,35 @@ def test_trace_records_errors_and_early_stops(task_dir: Path, tmp_path: Path) ->
     assert events[-1]["stop_reason"] == "gave_up"
     assert events[-1]["passed"] is False
     assert "judge_restore" in [e["event"] for e in events]  # restored even when the model gives up
+
+
+def _load_show_trace():
+    import importlib.util
+
+    path = Path(__file__).resolve().parent.parent / "scripts" / "show_trace.py"
+    spec = importlib.util.spec_from_file_location("show_trace", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_show_trace_tells_the_story(task_dir: Path, tmp_path: Path) -> None:
+    provider = ScriptedProvider([
+        tool_reply(("apply_edit", {"path": "src/stats.py", "old_str": "nope", "new_str": "x"}), text="Trying an edit."),
+        tool_reply(("apply_edit", {"path": "src/stats.py", "old_str": "(len(n) - 1)", "new_str": "len(n)"})),
+        tool_reply(("run_checks", {})),
+    ])
+    result = run_agent(
+        task_dir, settings=SETTINGS, provider=provider,
+        environment=FakeEnvironment(checks=fixed_when_edited), trace_dir=tmp_path,
+    )
+
+    text = _load_show_trace().story(read_trace(Path(result.trace_path)))
+
+    assert "task c999_demo" in text
+    assert "Initial check: FAILED (exit 1)" in text
+    assert "Step 1: model used 100 in / 20 out tokens" in text
+    assert "Model says: Trying an edit." in text
+    assert "-> apply_edit(" in text and "ERROR]" in text  # the failed first edit is visible
+    assert "Judge restored: put back nothing, deleted nothing" in text
+    assert "RESULT: PASSED  (stop reason: passed)" in text

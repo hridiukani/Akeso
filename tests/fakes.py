@@ -49,7 +49,8 @@ class FakeEnvironment:
         for path in root.rglob("*"):
             rel = path.relative_to(root).as_posix()
             if path.is_file() and not is_excluded_task_file(rel):
-                self.files[rel] = path.read_text(encoding="utf-8")
+                # Bytes, not read_text: keep \r\n exactly, like the real environments do.
+                self.files[rel] = path.read_bytes().decode("utf-8")
         self.started = True
 
     def stop(self) -> None:

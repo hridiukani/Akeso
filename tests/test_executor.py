@@ -14,7 +14,7 @@ from repair_agent.tools import execute_tool
 @pytest.fixture
 def env(tmp_path: Path) -> FakeEnvironment:
     (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "stats.py").write_text("def mean(n):\n    return sum(n) / (len(n) - 1)\n")
+    (tmp_path / "src" / "stats.py").write_text("def mean(n):\n    return sum(n) / (len(n) - 1)\n", newline="\n")
     fake = FakeEnvironment()
     fake.start(tmp_path)
     return fake
