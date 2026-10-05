@@ -20,7 +20,7 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 - Every commit must leave the project working: run the offline test suite before committing, and don't commit if it fails.
 - Use Conventional Commits messages (feat:, fix:, test:, docs:, chore:, refactor:).
 - Before every commit, check that .env and any secrets are not staged. Never commit them.
-- Don't push. When I say "topic done", push all of the topic's commits after giving me the summary below.
+- Never push. I push all commits myself at the end of each session.
 
 ## During a topic
 - Keep explanations brief unless I ask you to explain something.
@@ -29,7 +29,7 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 ## When I say "topic done: <name>"
 1. In chat, go through every commit in the topic in order: the commit message, what changed, and why. Explain clearly enough that I could describe each one in an interview.
 2. Add a LEARNING.md entry for the topic with only the important things: key concepts, important design decisions and why, anything surprising or tricky, and 3 to 5 interview questions with model answers. No commit-by-commit detail there; that lives in git history. Update the Project map and Glossary if needed. Never rewrite or delete earlier entries unless I ask you to fix a mistake.
-3. LEARNING.md is local only (gitignored, never committed): update it, then push the topic's commits.
+3. LEARNING.md is local only (gitignored, never committed), so there is nothing to commit for it.
 
 ## LEARNING.md entry format
 ### Topic N: <name>
