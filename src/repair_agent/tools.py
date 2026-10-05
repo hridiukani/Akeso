@@ -8,13 +8,17 @@ so the model can correct itself. Infrastructure failures (e.g. Docker dying) rai
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
+from jsonschema import Draft202012Validator, ValidationError
+
 from repair_agent.checks import CHECK_TIMEOUT_SECONDS, trim_output
 from repair_agent.environment import EnvError, Environment
-from repair_agent.llm.types import ToolDefinition
+from repair_agent.llm.types import ToolCall, ToolDefinition
 from repair_agent.paths import UnsafePathError, safe_relative_path
+from repair_agent.sandbox import SandboxError
 
 COMMAND_TIMEOUT_SECONDS = 60
 OUTPUT_LIMIT = 6000  # characters of command/test output returned to the model (the end is kept)
@@ -231,3 +235,53 @@ RUN_CHECKS_TOOL = ToolDefinition(
 )
 
 TOOL_DEFINITIONS = [READ_FILE_TOOL, APPLY_EDIT_TOOL, RUN_COMMAND_TOOL, RUN_CHECKS_TOOL]
+
+
+# --- executing a model's tool call ---
+
+# name -> (definition, function). Each function takes (env, **arguments).
+_REGISTRY: dict[str, tuple[ToolDefinition, Callable[..., ToolResult]]] = {
+    READ_FILE_TOOL.name: (READ_FILE_TOOL, read_file),
+    APPLY_EDIT_TOOL.name: (APPLY_EDIT_TOOL, apply_edit),
+    RUN_COMMAND_TOOL.name: (RUN_COMMAND_TOOL, run_command),
+    RUN_CHECKS_TOOL.name: (RUN_CHECKS_TOOL, run_checks),
+}
+
+
+def execute_tool(env: Environment, tool_call: ToolCall) -> ToolResult:
+    """Run one tool call from the model. Never raises: every problem becomes an error result.
+
+    Unknown tools and arguments that don't match the tool's JSON schema are rejected
+    with a message saying what was wrong, so the model can correct itself.
+    """
+    entry = _REGISTRY.get(tool_call.name)
+    if entry is None:
+        return error(
+            f"unknown tool {tool_call.name!r}. Available tools: {', '.join(sorted(_REGISTRY))}."
+        )
+    definition, function = entry
+
+    problems = sorted(
+        Draft202012Validator(definition.input_schema).iter_errors(tool_call.arguments),
+        key=lambda e: list(e.path),
+    )
+    if problems:
+        details = "; ".join(_describe(problem) for problem in problems)
+        expected = ", ".join(
+            f"{name}{'' if name in definition.input_schema.get('required', []) else ' (optional)'}"
+            for name in definition.input_schema.get("properties", {})
+        ) or "no arguments"
+        return error(f"invalid arguments for {tool_call.name}: {details}. Expected: {expected}.")
+
+    try:
+        return function(env, **tool_call.arguments)
+    except SandboxError as problem:
+        return error(f"the sandbox failed while running {tool_call.name}: {problem}")
+    except Exception as problem:  # a bad tool call must never crash the agent
+        return error(f"{tool_call.name} failed unexpectedly: {type(problem).__name__}: {problem}")
+
+
+def _describe(problem: ValidationError) -> str:
+    """One readable line per schema violation, naming the argument when there is one."""
+    where = ".".join(str(part) for part in problem.path)
+    return f"{where}: {problem.message}" if where else problem.message
