@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
+import sys
 import tempfile
-from pathlib import Path
+from collections.abc import Sequence
+from pathlib import Path, PurePosixPath
+from types import TracebackType
+
+from repair_agent.checks import CHECK_TIMEOUT_SECONDS, CheckResult, minimal_env, run_checks
+from repair_agent.environment import EnvError, ExecResult, FileTooLargeError
+from repair_agent.paths import UnsafePathError, safe_relative_path
 
 WORKSPACE_PREFIX = "repair-agent-"
 
@@ -39,3 +47,133 @@ def cleanup_workspace(workspace: str | Path) -> None:
         raise ValueError(f"Refusing to delete {path}: not a repair-agent workspace.")
     if path.exists():
         shutil.rmtree(path)
+
+
+class LocalWorkspace:
+    """Environment backed by a temporary copy of the task on this machine.
+
+    Only environment variables are hidden from task code here: it can still read your
+    files and use the network. Prefer DockerSandbox; this is for quick runs or machines
+    without Docker.
+    """
+
+    def __init__(self, max_file_bytes: int = 1_000_000) -> None:
+        self.max_file_bytes = max_file_bytes
+        self.root: Path | None = None
+
+    def start(self, task_dir: str | Path) -> None:
+        if self.root is not None:
+            raise EnvError("Workspace already started; call stop() first.")
+        self.root = create_workspace(task_dir)
+
+    def stop(self) -> None:
+        if self.root is None:
+            return
+        try:
+            cleanup_workspace(self.root)
+        finally:
+            self.root = None
+
+    def read_file(self, path: str) -> str:
+        rel, target = self._resolve(path)
+        if target.is_symlink():
+            raise EnvError(f"{rel} is a link; reading through links is not allowed.")
+        if not target.exists():
+            raise FileNotFoundError(f"{rel} does not exist in the workspace.")
+        if target.is_dir():
+            raise IsADirectoryError(f"{rel} is a directory, not a file.")
+        size = target.stat().st_size
+        if size > self.max_file_bytes:
+            raise FileTooLargeError(f"{rel} is {size} bytes; the limit is {self.max_file_bytes} bytes.")
+        # Bytes, not read_text, so line endings come back exactly as stored (like Docker).
+        return target.read_bytes().decode("utf-8", errors="replace")
+
+    def write_file(self, path: str, content: str) -> None:
+        data = content.encode("utf-8")
+        if len(data) > self.max_file_bytes:
+            raise FileTooLargeError(
+                f"Refusing to write {len(data)} bytes to {path}; the limit is {self.max_file_bytes} bytes."
+            )
+        _, target = self._resolve(path)
+        if target.is_symlink():
+            target.unlink()  # replace the link itself; never write through it
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+    def list_files(self, path: str = ".") -> list[str]:
+        rel, base = self._resolve(path, allow_root=True)
+        if not base.exists():
+            raise FileNotFoundError(f"{rel} does not exist in the workspace.")
+        root = self._require_started()
+        candidates = [base] if base.is_file() else base.rglob("*")
+        # Regular files only (not links), matching `find -type f` in the sandbox.
+        return sorted(
+            p.relative_to(root).as_posix() for p in candidates if p.is_file() and not p.is_symlink()
+        )
+
+    def exec(self, cmd: str | Sequence[str], timeout: float) -> ExecResult:
+        """Run cmd in the workspace with a minimal environment.
+
+        A list runs directly; "python" as the first item means this interpreter, which
+        has pytest installed (as "python" does in the Docker image). A string runs
+        through the system shell.
+        """
+        root = self._require_started()
+        if isinstance(cmd, str):
+            args: str | list[str] = cmd
+        else:
+            args = list(cmd)
+            if args and args[0] == "python":
+                args[0] = sys.executable
+        try:
+            completed = subprocess.run(
+                args,
+                shell=isinstance(args, str),
+                cwd=root,
+                env=minimal_env(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as error:
+            partial = error.output or ""
+            if isinstance(partial, bytes):  # TimeoutExpired can hold bytes even when text=True
+                partial = partial.decode("utf-8", errors="replace")
+            return ExecResult(None, f"{partial}\n[command timed out after {timeout:g} seconds]")
+        return ExecResult(completed.returncode, completed.stdout)
+
+    def run_checks(self, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
+        return run_checks(self._require_started(), timeout)
+
+    def _require_started(self) -> Path:
+        if self.root is None:
+            raise EnvError("Workspace not started; call start() first.")
+        return self.root
+
+    def _resolve(self, path: str, allow_root: bool = False) -> tuple[PurePosixPath, Path]:
+        """Check path with the shared rules, then confirm it stays inside the workspace."""
+        rel = safe_relative_path(path)
+        if rel == PurePosixPath(".") and not allow_root:
+            raise UnsafePathError(f"path {path!r} refers to the workspace itself, not a file.")
+        root = self._require_started()
+        target = root / rel
+        # Second line of defence: a link in a parent folder must not lead outside.
+        # (For "." the target is the root itself, so check it rather than its parent.)
+        container = target if rel == PurePosixPath(".") else target.parent
+        if not container.resolve().is_relative_to(root.resolve()):
+            raise UnsafePathError(f"path {path!r} leads outside the workspace.")
+        return rel, target
+
+    def __enter__(self) -> LocalWorkspace:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.stop()
