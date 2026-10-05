@@ -19,7 +19,8 @@ IMAGES = {
 
 def main() -> int:
     for tag, dockerfile in IMAGES.items():
-        print(f"Building {tag} from docker/{dockerfile} ...")
+        # flush so this line appears before docker's own output when piped to a log
+        print(f"Building {tag} from docker/{dockerfile} ...", flush=True)
         # The build context is docker/ only, so nothing else in the repo (.env, tasks,
         # source) is ever sent to the Docker daemon or baked into the image.
         result = subprocess.run(
