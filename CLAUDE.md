@@ -16,7 +16,7 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 5. Prefer simple, readable code over clever code. Use type hints and short docstrings. Comments explain why, not what.
 
 ## Committing
-- You commit everything yourself. Make small, focused commits: each one a single meaningful change (for example "add config loader", "add tests for path safety"), typically 1 to 3 commits per prompt and more than 7 per topic. Never make empty or padding commits.
+- You commit everything yourself. Make small, focused commits: each one a single meaningful change (for example "add config loader", "add tests for path safety"), typically 1 to 3 commits per prompt. There is no target count per topic: make as many commits as there are meaningful changes. Never make empty or padding commits.
 - Every commit must leave the project working: run the offline test suite before committing, and don't commit if it fails.
 - Use Conventional Commits messages (feat:, fix:, test:, docs:, chore:, refactor:).
 - Before every commit, check that .env and any secrets are not staged. Never commit them.
@@ -29,7 +29,7 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 ## When I say "topic done: <name>"
 1. In chat, go through every commit in the topic in order: the commit message, what changed, and why. Explain clearly enough that I could describe each one in an interview.
 2. Add a LEARNING.md entry for the topic with only the important things: key concepts, important design decisions and why, anything surprising or tricky, and 3 to 5 interview questions with model answers. No commit-by-commit detail there; that lives in git history. Update the Project map and Glossary if needed. Never rewrite or delete earlier entries unless I ask you to fix a mistake.
-3. Commit the LEARNING.md entry, then push.
+3. LEARNING.md is local only (gitignored, never committed): update it, then push the topic's commits.
 
 ## LEARNING.md entry format
 ### Topic N: <name>
