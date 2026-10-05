@@ -108,8 +108,29 @@ class GroqProvider:
 def _to_openai_messages(system: str, messages: Sequence[Message]) -> list[dict[str, Any]]:
     """OpenAI format puts the system prompt in the message list as the first message."""
     converted: list[dict[str, Any]] = [{"role": "system", "content": system}]
-    converted.extend({"role": m.role, "content": m.content} for m in messages)
+    converted.extend(_to_openai_message(m) for m in messages)
     return converted
+
+
+def _to_openai_message(message: Message) -> dict[str, Any]:
+    if message.role == "tool":
+        # OpenAI format has no is_error flag; our error results already start with "Error:".
+        return {"role": "tool", "tool_call_id": message.tool_call_id, "content": message.content}
+    if message.role == "assistant" and message.tool_calls:
+        return {
+            "role": "assistant",
+            "content": message.content or None,  # OpenAI format uses null when there's no text
+            "tool_calls": [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    # Arguments go back as a JSON string, the way the API sent them.
+                    "function": {"name": call.name, "arguments": json.dumps(call.arguments)},
+                }
+                for call in message.tool_calls
+            ],
+        }
+    return {"role": message.role, "content": message.content}
 
 
 def _to_openai_tool(tool: ToolDefinition) -> dict[str, Any]:
