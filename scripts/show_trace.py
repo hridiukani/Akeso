@@ -18,6 +18,9 @@ PREVIEW_LINES = 8
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows consoles and pipes default to a legacy code page, so characters in test
+    # output (like pytest's "±") would print as garbage without this.
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Show an agent trace as a story.")
     parser.add_argument("path", type=Path, help="a .jsonl trace, or a run folder containing them")
     parser.add_argument("--full", action="store_true", help="show complete outputs instead of previews")

@@ -136,3 +136,18 @@ def test_show_trace_tells_the_story(task_dir: Path, tmp_path: Path) -> None:
     assert "-> apply_edit(" in text and "ERROR]" in text  # the failed first edit is visible
     assert "Judge restored: put back nothing, deleted nothing" in text
     assert "RESULT: PASSED  (stop reason: passed)" in text
+
+
+def test_show_trace_prints_utf8_even_when_piped(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    path = tmp_path / "t.jsonl"
+    with TraceWriter(path) as trace:
+        trace.event("error", step=1, error="assert 6.0 == 4.0 \u00b1 4.0e-06")
+    script = Path(__file__).resolve().parent.parent / "scripts" / "show_trace.py"
+
+    # A pipe, with no PYTHONIOENCODING help: Windows would default to a legacy code page.
+    completed = subprocess.run([sys.executable, str(script), str(path)], capture_output=True, check=True)
+
+    assert "\u00b1".encode("utf-8") in completed.stdout

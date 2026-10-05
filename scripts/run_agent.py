@@ -17,6 +17,9 @@ from repair_agent.sandbox import SandboxError
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows consoles and pipes default to a legacy code page, so characters in test
+    # output (like pytest's "±") would print as garbage without this.
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Run the repair agent on one task.")
     parser.add_argument("task", type=Path, help="path to a task folder, e.g. tasks/code/c001_mean")
     parser.add_argument("--max-steps", type=int, help="maximum model calls (default: AGENT_MAX_STEPS from .env, or 20)")
