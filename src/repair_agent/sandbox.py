@@ -147,9 +147,14 @@ class DockerSandbox:
             )
         with tarfile.open(fileobj=io.BytesIO(b"".join(stream))) as archive:
             member = archive.next()
-            # get_archive returns links as links, so this also refuses to read through a symlink.
+            # get_archive returns links as links (it doesn't follow them), so we can spot
+            # and refuse them rather than read whatever they point at.
+            if member is not None and (member.issym() or member.islnk()):
+                raise SandboxError(f"{rel} is a link; reading through links is not allowed.")
+            if member is not None and member.isdir():
+                raise IsADirectoryError(f"{rel} is a directory, not a file.")
             if member is None or not member.isfile():
-                raise IsADirectoryError(f"{rel} is not a regular file.")
+                raise SandboxError(f"{rel} is not a regular file.")
             data = archive.extractfile(member).read()
         return data.decode("utf-8", errors="replace")
 

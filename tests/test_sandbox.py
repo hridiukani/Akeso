@@ -254,8 +254,17 @@ def test_read_directory_raises(running: DockerSandbox) -> None:
 def test_read_refuses_symlink_out_of_workspace(running: DockerSandbox) -> None:
     running.exec("ln -s /etc/passwd src/link", timeout=10)
 
-    with pytest.raises(IsADirectoryError, match="not a regular file"):
+    with pytest.raises(SandboxError, match="is a link"):
         running.read_file("src/link")
+
+
+@needs_docker
+def test_read_refuses_symlink_inside_workspace(running: DockerSandbox) -> None:
+    # Even a link to a harmless file is refused: reads never follow links.
+    running.exec("ln -s code.py src/alias.py", timeout=10)
+
+    with pytest.raises(SandboxError, match="is a link"):
+        running.read_file("src/alias.py")
 
 
 # Path checks run before touching Docker, so these tests don't need a container.
