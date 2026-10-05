@@ -10,7 +10,7 @@ import pytest
 from akeso.checks import CheckResult, run_checks
 from akeso.workspace import LocalWorkspace
 
-PROBE_NAME = "REPAIR_AGENT_TEST_SECRET"
+PROBE_NAME = "AKESO_TEST_SECRET"
 PROBE_VALUE = "fake-secret-value-123"
 
 

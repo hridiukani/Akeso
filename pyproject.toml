@@ -25,5 +25,5 @@ pythonpath = ["tests"]
 # A typo like @pytest.mark.dokcer becomes an error instead of a silently unmarked test.
 addopts = "--strict-markers"
 markers = [
-    "docker: needs Docker running and the repair-agent-code image built (quick run: -m \"not docker\")",
+    "docker: needs Docker running and the akeso-code image built (quick run: -m \"not docker\")",
 ]

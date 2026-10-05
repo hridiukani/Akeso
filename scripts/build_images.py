@@ -13,7 +13,7 @@ DOCKER_DIR = Path(__file__).resolve().parent.parent / "docker"
 
 # image tag -> Dockerfile inside docker/
 IMAGES = {
-    "repair-agent-code:latest": "code.Dockerfile",
+    "akeso-code:latest": "code.Dockerfile",
 }
 
 

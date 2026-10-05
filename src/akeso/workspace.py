@@ -15,7 +15,7 @@ from akeso.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
 from akeso.environment import EnvError, ExecResult, FileTooLargeError
 from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
-WORKSPACE_PREFIX = "repair-agent-"
+WORKSPACE_PREFIX = "akeso-"
 
 
 def _ignore_excluded(directory: str, names: list[str]) -> set[str]:
@@ -65,7 +65,7 @@ def cleanup_workspace(workspace: str | Path) -> None:
     path = Path(workspace).resolve()
     temp_root = Path(tempfile.gettempdir()).resolve()
     if path.parent != temp_root or not path.name.startswith(WORKSPACE_PREFIX):
-        raise ValueError(f"Refusing to delete {path}: not a repair-agent workspace.")
+        raise ValueError(f"Refusing to delete {path}: not an Akeso workspace.")
     if path.exists():
         shutil.rmtree(path)
 

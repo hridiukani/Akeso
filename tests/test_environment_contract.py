@@ -184,10 +184,10 @@ def test_exec_timeout(env: Environment) -> None:
 
 
 def test_exec_hides_host_environment(make_env: EnvFactory, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("REPAIR_AGENT_PROBE", "host-secret-value")
+    monkeypatch.setenv("AKESO_PROBE", "host-secret-value")
     env = make_env()
 
-    result = env.exec(["python", "-c", "import os; print(os.environ.get('REPAIR_AGENT_PROBE'))"], timeout=30)
+    result = env.exec(["python", "-c", "import os; print(os.environ.get('AKESO_PROBE'))"], timeout=30)
 
     assert result.output.strip() == "None"
 

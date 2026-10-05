@@ -1,4 +1,4 @@
-"""Run the repair agent on one task in the Docker sandbox and print the result.
+"""Run the Akeso agent on one task in the Docker sandbox and print the result.
 
 Run from the repo root (so .env is found):
     python scripts/run_agent.py tasks/code/c001_mean
@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     # Windows consoles and pipes default to a legacy code page, so characters in test
     # output (like pytest's "±") would print as garbage without this.
     sys.stdout.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Run the repair agent on one task.")
+    parser = argparse.ArgumentParser(description="Run the Akeso agent on one task.")
     parser.add_argument("task", type=Path, help="path to a task folder, e.g. tasks/code/c001_mean")
     parser.add_argument("--max-steps", type=int, help="maximum model calls (default: AGENT_MAX_STEPS from .env, or 20)")
     args = parser.parse_args(argv)

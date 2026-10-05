@@ -64,7 +64,7 @@ _VOLATILE = [
     (re.compile(r"\b\d+(?:\.\d+)?s\b"), "<time>"),  # other durations, e.g. "0.12s call"
     (re.compile(r"\b0x[0-9a-fA-F]+\b"), "0x<addr>"),  # memory addresses in reprs
     (re.compile(r"pytest-of-[^/\s]+/pytest-\d+"), "pytest-of-<user>/pytest-<n>"),  # tmp_path dirs
-    (re.compile(r"repair-agent-[A-Za-z0-9_]+"), "repair-agent-<tmp>"),  # our workspace dirs
+    (re.compile(r"akeso-[A-Za-z0-9_]+"), "akeso-<tmp>"),  # our workspace dirs
     (re.compile(r"\[\.\.\. ?\d+ characters trimmed \.\.\.\]"), "[... characters trimmed ...]"),
 ]
 

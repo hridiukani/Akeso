@@ -51,7 +51,7 @@ def test_different_failures_stay_different() -> None:
         ("0.12s call     tests/test_x.py::test_slow", "<time> call     tests/test_x.py::test_slow"),
         ("<object at 0xDEADbeef42>", "<object at 0x<addr>>"),
         ("/tmp/pytest-of-agent/pytest-7/x", "/tmp/pytest-of-<user>/pytest-<n>/x"),
-        ("C:\\Temp\\repair-agent-k3j_9x\\src", "C:\\Temp\\repair-agent-<tmp>\\src"),
+        ("C:\\Temp\\akeso-k3j_9x\\src", "C:\\Temp\\akeso-<tmp>\\src"),
         ("[... 1234 characters trimmed ...]\nE  boom", "[... characters trimmed ...]\nE  boom"),
         ("\x1b[1m\x1b[31mFAILED\x1b[0m", "FAILED"),
         ("  line with trailing spaces   \n\n", "line with trailing spaces"),

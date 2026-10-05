@@ -1,7 +1,7 @@
 # Project instructions for Claude Code
 
 ## The project
-Working name: repair-agent (placeholder; final name not chosen yet).
+Name: Akeso.
 
 A CLI that gives an LLM a broken code repo (failing pytest tests) or a broken SQL query. The LLM can read files, edit files, run commands and run checks inside a disposable, locked-down Docker container. It loops until the checks pass or a limit is hit (max steps, max cost, repeated identical error). Every step is saved as a trace. A frozen suite of about 30 tasks is scored on pass rate, steps and cost. Tests or the gold query result are the judge, never the model.
 

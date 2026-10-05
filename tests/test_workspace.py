@@ -66,7 +66,7 @@ def test_cleanup_twice_is_safe(task_dir: Path) -> None:
 
 
 def test_cleanup_refuses_non_workspace_paths(task_dir: Path) -> None:
-    with pytest.raises(ValueError, match="not a repair-agent workspace"):
+    with pytest.raises(ValueError, match="not an Akeso workspace"):
         cleanup_workspace(task_dir)
     assert task_dir.exists()
 

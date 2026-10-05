@@ -23,12 +23,12 @@ from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_pa
 
 __all__ = ["DockerSandbox", "ExecResult", "FileTooLargeError", "SandboxError"]
 
-IMAGE = "repair-agent-code:latest"
+IMAGE = "akeso-code:latest"
 WORKDIR = "/workspace"
 USER = "agent"
 USER_ID = 1000  # must match the uid created in docker/code.Dockerfile
-# Lets us find (and clean up) our containers: docker ps -a --filter label=repair-agent
-LABEL = {"repair-agent": "sandbox"}
+# Lets us find (and clean up) our containers: docker ps -a --filter label=akeso
+LABEL = {"akeso": "sandbox"}
 # Labelled containers older than this are leftovers from crashed runs (no run lasts this long).
 LEFTOVER_MAX_AGE = timedelta(hours=1)
 

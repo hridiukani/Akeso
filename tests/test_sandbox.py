@@ -56,7 +56,7 @@ def test_container_is_locked_down(running: DockerSandbox) -> None:
     assert host_config["NanoCpus"] == 1_000_000_000
     assert host_config["PidsLimit"] == 128
     assert container.attrs["Mounts"] == []  # no host folders
-    assert container.labels == {"repair-agent": "sandbox"}
+    assert container.labels == {"akeso": "sandbox"}
 
 
 @pytest.mark.docker
@@ -79,13 +79,13 @@ def test_no_network(running: DockerSandbox) -> None:
 
 @pytest.mark.docker
 def test_host_environment_not_passed(task_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("REPAIR_AGENT_PROBE", "host-secret-value")
+    monkeypatch.setenv("AKESO_PROBE", "host-secret-value")
     with DockerSandbox() as sandbox:
         sandbox.start(task_dir)  # started after the variable is set in this process
 
         result = sandbox.exec("env", timeout=10)
 
-    assert "REPAIR_AGENT_PROBE" not in result.output
+    assert "AKESO_PROBE" not in result.output
     assert "host-secret-value" not in result.output
 
 
@@ -177,7 +177,7 @@ def test_exec_before_start_raises() -> None:
 @pytest.mark.docker
 def test_missing_image_gives_build_instructions(task_dir: Path) -> None:
     with pytest.raises(SandboxError, match="build_images.py"):
-        DockerSandbox(image="repair-agent-does-not-exist:latest").start(task_dir)
+        DockerSandbox(image="akeso-does-not-exist:latest").start(task_dir)
 
 
 def test_docker_not_running_gives_clear_message(

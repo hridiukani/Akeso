@@ -1,4 +1,4 @@
-"""Remove leftover repair-agent sandbox containers (only ones with our label).
+"""Remove leftover Akeso sandbox containers (only ones with our label).
 
 Run from anywhere:
     python scripts/cleanup_containers.py                       # older than 1 hour
@@ -25,7 +25,7 @@ def _minutes(text: str) -> float:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Remove leftover repair-agent sandbox containers.")
+    parser = argparse.ArgumentParser(description="Remove leftover Akeso sandbox containers.")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--all",

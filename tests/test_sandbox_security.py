@@ -21,7 +21,7 @@ pytestmark = pytest.mark.docker
 FAKE_KEYS = {
     "GROQ_API_KEY": "gsk-fake-groq-key-for-security-test",
     "ANTHROPIC_API_KEY": "sk-ant-fake-anthropic-key-for-security-test",
-    "REPAIR_AGENT_PROBE": "fake-probe-value",
+    "AKESO_PROBE": "fake-probe-value",
 }
 
 
