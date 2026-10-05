@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from dotenv import dotenv_values
 
@@ -42,6 +44,16 @@ PRICES: dict[str, ModelPrice] = {
 
 
 @dataclass(frozen=True)
+class AgentLimits:
+    """When the agent loop must stop. Set in .env (AGENT_*); these are the defaults."""
+
+    max_steps: int = 20  # model calls
+    max_cost_usd: float = 1.00  # the real budget on paid providers
+    max_total_tokens: int = 300_000  # input + output; the real budget on Groq, where cost is $0
+    repeated_failure_limit: int = 3  # stop after this many identical failing check outputs in a row
+
+
+@dataclass(frozen=True)
 class Settings:
     """Settings for one run."""
 
@@ -51,6 +63,7 @@ class Settings:
     # repr=False so printing or logging a Settings object never shows the keys.
     groq_api_key: str | None = field(default=None, repr=False)
     anthropic_api_key: str | None = field(default=None, repr=False)
+    limits: AgentLimits = field(default_factory=AgentLimits)
 
     @property
     def model(self) -> str:
@@ -97,10 +110,41 @@ def load_settings(env_file: str | Path = ".env") -> Settings:
             "Add its price to PRICES in src/repair_agent/config.py, or fix the model name."
         )
 
+    defaults = AgentLimits()
+    limits = AgentLimits(
+        max_steps=_number(get, "AGENT_MAX_STEPS", int, defaults.max_steps, minimum=1),
+        max_cost_usd=_number(get, "AGENT_MAX_COST_USD", float, defaults.max_cost_usd, minimum=0.0),
+        max_total_tokens=_number(get, "AGENT_MAX_TOTAL_TOKENS", int, defaults.max_total_tokens, minimum=1),
+        repeated_failure_limit=_number(
+            get, "AGENT_REPEATED_FAILURE_LIMIT", int, defaults.repeated_failure_limit, minimum=2
+        ),
+    )
+
     return Settings(
         provider=provider,
         groq_model=get("GROQ_MODEL"),
         anthropic_model=get("ANTHROPIC_MODEL"),
         groq_api_key=get("GROQ_API_KEY"),
         anthropic_api_key=get("ANTHROPIC_API_KEY"),
+        limits=limits,
     )
+
+
+def _number(
+    get: Callable[[str], str | None],
+    name: str,
+    kind: type[int] | type[float],
+    default: int | float,
+    minimum: int | float,
+) -> Any:
+    """Read an optional numeric setting, or fail with a message naming the variable."""
+    raw = get(name)
+    if raw is None:
+        return default
+    try:
+        value = kind(raw)
+    except ValueError:
+        raise ConfigError(f"{name}={raw!r} is not a valid {kind.__name__}.") from None
+    if value < minimum:
+        raise ConfigError(f"{name}={raw!r} must be at least {minimum}.")
+    return value

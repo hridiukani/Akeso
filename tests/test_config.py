@@ -4,9 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from repair_agent.config import ConfigError, load_settings
+from repair_agent.config import AgentLimits, ConfigError, load_settings
 
-ENV_VARS = ("PROVIDER", "GROQ_API_KEY", "GROQ_MODEL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL")
+ENV_VARS = (
+    "PROVIDER", "GROQ_API_KEY", "GROQ_MODEL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
+    "AGENT_MAX_STEPS", "AGENT_MAX_COST_USD", "AGENT_MAX_TOTAL_TOKENS", "AGENT_REPEATED_FAILURE_LIMIT",
+)
 FAKE_GROQ_KEY = "gsk-fake-groq-key-123"
 FAKE_ANTHROPIC_KEY = "sk-ant-fake-anthropic-key-456"
 
@@ -107,3 +110,40 @@ def test_errors_and_repr_never_contain_key_values(tmp_path: Path) -> None:
 
     env_file = write_env(tmp_path, f"GROQ_API_KEY={FAKE_GROQ_KEY}\nGROQ_MODEL=openai/gpt-oss-120b\n")
     assert FAKE_GROQ_KEY not in repr(load_settings(env_file))
+
+
+# --- agent limits ---
+
+GROQ_BASE = f"GROQ_API_KEY={FAKE_GROQ_KEY}\nGROQ_MODEL=openai/gpt-oss-120b\n"
+
+
+def test_agent_limits_default_when_unset(tmp_path: Path) -> None:
+    limits = load_settings(write_env(tmp_path, GROQ_BASE)).limits
+
+    assert limits == AgentLimits()
+    assert (limits.max_steps, limits.max_cost_usd, limits.max_total_tokens, limits.repeated_failure_limit) == (20, 1.0, 300_000, 3)
+
+
+def test_agent_limits_read_from_env_file(tmp_path: Path) -> None:
+    env_file = write_env(
+        tmp_path,
+        GROQ_BASE
+        + "AGENT_MAX_STEPS=5\nAGENT_MAX_COST_USD=0.25\nAGENT_MAX_TOTAL_TOKENS=50000\nAGENT_REPEATED_FAILURE_LIMIT=4\n",
+    )
+
+    assert load_settings(env_file).limits == AgentLimits(5, 0.25, 50_000, 4)
+
+
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        ("AGENT_MAX_STEPS=lots", "AGENT_MAX_STEPS='lots' is not a valid int"),
+        ("AGENT_MAX_STEPS=0", "AGENT_MAX_STEPS='0' must be at least 1"),
+        ("AGENT_MAX_COST_USD=-1", "must be at least 0.0"),
+        ("AGENT_REPEATED_FAILURE_LIMIT=1", "must be at least 2"),
+        ("AGENT_MAX_TOTAL_TOKENS=1.5", "is not a valid int"),
+    ],
+)
+def test_invalid_agent_limits_name_the_variable(tmp_path: Path, line: str, message: str) -> None:
+    with pytest.raises(ConfigError, match=message):
+        load_settings(write_env(tmp_path, GROQ_BASE + line + "\n"))
