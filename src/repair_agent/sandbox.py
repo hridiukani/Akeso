@@ -36,6 +36,10 @@ class SandboxError(Exception):
     """Docker isn't available, the image is missing, or the sandbox is used incorrectly."""
 
 
+class FileTooLargeError(SandboxError):
+    """A file is bigger than the sandbox's max_file_bytes limit."""
+
+
 @dataclass(frozen=True)
 class ExecResult:
     """Outcome of one command run inside the sandbox."""
@@ -58,11 +62,15 @@ class DockerSandbox:
         memory: str = "512m",
         cpus: float = 1.0,
         pids_limit: int = 128,
+        max_file_bytes: int = 1_000_000,
     ) -> None:
         self.image = image
         self.memory = memory
         self.cpus = cpus
         self.pids_limit = pids_limit
+        # Caps read_file/write_file so a model can't write huge files or pull them into
+        # its context (which costs tokens and money).
+        self.max_file_bytes = max_file_bytes
         self.container: Container | None = None
 
     def start(self, task_dir: str | Path) -> None:
@@ -129,9 +137,14 @@ class DockerSandbox:
         rel = _file_path(path)
         container = self._require_started()
         try:
-            stream, _ = container.get_archive(f"{WORKDIR}/{rel}")
+            stream, stat = container.get_archive(f"{WORKDIR}/{rel}")
         except NotFound:
             raise FileNotFoundError(f"{rel} does not exist in {WORKDIR}.") from None
+        # Docker reports the size up front, so refuse before downloading anything.
+        if stat.get("size", 0) > self.max_file_bytes:
+            raise FileTooLargeError(
+                f"{rel} is {stat['size']} bytes; the limit is {self.max_file_bytes} bytes."
+            )
         with tarfile.open(fileobj=io.BytesIO(b"".join(stream))) as archive:
             member = archive.next()
             # get_archive returns links as links, so this also refuses to read through a symlink.
@@ -143,8 +156,12 @@ class DockerSandbox:
     def write_file(self, path: str, content: str) -> None:
         """Create or overwrite a file (and any missing parent folders) relative to /workspace."""
         rel = _file_path(path)
-        container = self._require_started()
         data = content.encode("utf-8")
+        if len(data) > self.max_file_bytes:
+            raise FileTooLargeError(
+                f"Refusing to write {len(data)} bytes to {rel}; the limit is {self.max_file_bytes} bytes."
+            )
+        container = self._require_started()
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w") as archive:
             # Explicit folder entries so new folders are owned by the sandbox user too.

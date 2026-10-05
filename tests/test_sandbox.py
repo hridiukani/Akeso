@@ -11,7 +11,7 @@ import pytest
 
 from repair_agent import sandbox as sandbox_module
 from repair_agent.paths import UnsafePathError
-from repair_agent.sandbox import IMAGE, DockerSandbox, SandboxError
+from repair_agent.sandbox import IMAGE, DockerSandbox, FileTooLargeError, SandboxError
 
 
 def _docker_ready() -> bool:
@@ -296,3 +296,44 @@ def test_unsafe_write_leaves_container_unchanged(running: DockerSandbox) -> None
 
     assert running.list_files() == before
     assert running.exec("test -e /outside.py", timeout=10).exit_code == 1
+
+
+# --- size limits ---
+
+
+@pytest.fixture
+def small_limit(task_dir: Path):
+    with DockerSandbox(max_file_bytes=100) as sandbox:
+        sandbox.start(task_dir)
+        yield sandbox
+
+
+@needs_docker
+def test_write_over_limit_is_refused_and_writes_nothing(small_limit: DockerSandbox) -> None:
+    with pytest.raises(FileTooLargeError, match="limit is 100 bytes"):
+        small_limit.write_file("src/big.py", "x" * 101)
+
+    assert "src/big.py" not in small_limit.list_files()
+
+
+@needs_docker
+def test_write_at_limit_is_allowed(small_limit: DockerSandbox) -> None:
+    small_limit.write_file("src/exact.py", "x" * 100)
+
+    assert small_limit.read_file("src/exact.py") == "x" * 100
+
+
+@needs_docker
+def test_read_over_limit_is_refused(small_limit: DockerSandbox) -> None:
+    # Created by a command inside the container, bypassing write_file's own limit.
+    small_limit.exec("head -c 5000 /dev/zero > src/big.bin", timeout=10)
+
+    with pytest.raises(FileTooLargeError, match="5000 bytes"):
+        small_limit.read_file("src/big.bin")
+
+
+def test_size_limit_counts_bytes_not_characters() -> None:
+    # "é" is 2 bytes in UTF-8, so 60 of them (120 bytes) exceed a 100-byte limit.
+    # The check runs before the container is needed, so no Docker required.
+    with pytest.raises(FileTooLargeError):
+        DockerSandbox(max_file_bytes=100).write_file("src/a.py", "é" * 60)
