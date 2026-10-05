@@ -170,6 +170,38 @@ def test_command_using_too_much_memory_is_stopped(sandbox: DockerSandbox) -> Non
     assert sandbox.exec(["echo", "still alive"], timeout=10).output.strip() == "still alive"
 
 
+PROCESS_LIMIT_PROBE = """
+import subprocess
+procs = []
+try:
+    for _ in range(500):  # bounded: never an endless fork bomb
+        try:
+            procs.append(subprocess.Popen(["sleep", "60"]))
+        except OSError as error:  # e.g. BlockingIOError: Resource temporarily unavailable
+            print("blocked", len(procs), type(error).__name__)
+            break
+    else:
+        print("started", len(procs))
+finally:
+    for proc in procs:
+        proc.kill()
+    for proc in procs:
+        proc.wait()
+"""
+
+
+def test_process_limit_stops_runaway_process_creation(sandbox: DockerSandbox) -> None:
+    # The exec timeout guarantees this can't hang even if the limit were missing.
+    result = python(sandbox, PROCESS_LIMIT_PROBE, timeout=60)
+
+    words = result.output.split()
+    assert words[:1] == ["blocked"], result.output  # hit the limit before reaching 500
+    assert int(words[1]) < 500
+    assert int(words[1]) <= sandbox.pids_limit
+    # The sandbox recovers and still runs normal commands.
+    assert sandbox.exec(["echo", "still alive"], timeout=10).output.strip() == "still alive"
+
+
 # --- cleanup ---
 
 
