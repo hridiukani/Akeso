@@ -18,6 +18,8 @@ dependencies = [
 [tool.pytest.ini_options]
 # Only the harness's own tests. Task folders contain deliberately failing tests.
 testpaths = ["tests"]
+# A typo like @pytest.mark.dokcer becomes an error instead of a silently unmarked test.
+addopts = "--strict-markers"
 markers = [
     "docker: needs Docker running and the repair-agent-code image built (quick run: -m \"not docker\")",
 ]
