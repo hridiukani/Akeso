@@ -9,7 +9,6 @@ from __future__ import annotations
 import io
 import tarfile
 import time
-from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
@@ -17,7 +16,10 @@ import docker
 from docker.errors import DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 
+from repair_agent.environment import EnvError, ExecResult, FileTooLargeError
 from repair_agent.paths import UnsafePathError, safe_relative_path
+
+__all__ = ["DockerSandbox", "ExecResult", "FileTooLargeError", "SandboxError"]
 
 IMAGE = "repair-agent-code:latest"
 WORKDIR = "/workspace"
@@ -32,20 +34,8 @@ _KILL_GRACE_SECONDS = 2
 _SKIPPED_NAMES = {"__pycache__", ".pytest_cache"}
 
 
-class SandboxError(Exception):
+class SandboxError(EnvError):
     """Docker isn't available, the image is missing, or the sandbox is used incorrectly."""
-
-
-class FileTooLargeError(SandboxError):
-    """A file is bigger than the sandbox's max_file_bytes limit."""
-
-
-@dataclass(frozen=True)
-class ExecResult:
-    """Outcome of one command run inside the sandbox."""
-
-    exit_code: int | None  # None when the command was killed by the timeout
-    output: str  # stdout and stderr combined
 
 
 class DockerSandbox:

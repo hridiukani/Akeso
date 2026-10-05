@@ -1,0 +1,74 @@
+"""The Environment interface: everywhere a run can read, edit and test task files.
+
+Two implementations: LocalWorkspace (a temp copy on this machine) and DockerSandbox
+(a locked-down container). The rest of the code only uses this interface, so it never
+needs to know which one it's talking to.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from types import TracebackType
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:  # avoid an import cycle: checks.py imports this module
+    from repair_agent.checks import CheckResult
+
+
+class EnvError(Exception):
+    """An environment operation failed (e.g. reading through a link)."""
+
+
+class FileTooLargeError(EnvError):
+    """A file is bigger than the environment's max_file_bytes limit."""
+
+
+@dataclass(frozen=True)
+class ExecResult:
+    """Outcome of one command run inside an environment."""
+
+    exit_code: int | None  # None when the command was killed by the timeout
+    output: str  # stdout and stderr combined
+
+
+class Environment(Protocol):
+    """A place holding a copy of one task, where files can be changed and tests run.
+
+    All paths are relative to the task root and checked with paths.safe_relative_path.
+    Use as a context manager so the environment is always cleaned up.
+    """
+
+    def start(self, task_dir: str | Path) -> None:
+        """Copy the task into the environment. The original task folder is never modified."""
+        ...
+
+    def stop(self) -> None:
+        """Delete the environment and everything in it. Safe to call more than once."""
+        ...
+
+    def read_file(self, path: str) -> str: ...
+
+    def write_file(self, path: str, content: str) -> None: ...
+
+    def list_files(self, path: str = ".") -> list[str]:
+        """Every file under path, relative to the task root, sorted."""
+        ...
+
+    def exec(self, cmd: str | Sequence[str], timeout: float) -> ExecResult:
+        """Run a command in the task root; kill it after `timeout` seconds."""
+        ...
+
+    def run_checks(self, timeout: float = ...) -> CheckResult:
+        """Run the task's tests (the judge) and report the result."""
+        ...
+
+    def __enter__(self) -> Environment: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None: ...
