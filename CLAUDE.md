@@ -10,31 +10,34 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 
 ## Rules for every task
 1. Do only what the current prompt asks. No extra features. If you think something else is needed, suggest it at the end instead of building it.
-2. Keep each change small enough for one commit.
-3. Before writing code, give a short plan: which files, and why. Then build.
-4. During a topic, explain each change briefly: what you built, why, and anything non-obvious. Go into detail only when I ask.
-5. Show me how to run and verify it myself: exact commands and expected output.
-6. Do NOT run git commit or git push. After every change, show me the exact git commands and a commit message in Conventional Commits style (feat:, fix:, test:, docs:, chore:). I run them myself.
-7. Never read, print or commit secrets. API keys (GROQ_API_KEY and ANTHROPIC_API_KEY) live only in .env, which is gitignored. Never pass .env, host environment variables or host folders into a container.
-8. Prefer simple, readable code over clever code. Use type hints and short docstrings. Comments explain why, not what.
+2. Before writing code, give a short plan: which files, and why. Then build.
+3. Show me how to run and verify it myself: exact commands and expected output.
+4. Never read, print or commit secrets. API keys (GROQ_API_KEY and ANTHROPIC_API_KEY) live only in .env, which is gitignored. Never pass .env, host environment variables or host folders into a container.
+5. Prefer simple, readable code over clever code. Use type hints and short docstrings. Comments explain why, not what.
+
+## Committing
+- You commit everything yourself. Make small, focused commits: each one a single meaningful change (for example "add config loader", "add tests for path safety"), typically 1 to 3 commits per prompt and more than 7 per topic. Never make empty or padding commits.
+- Every commit must leave the project working: run the offline test suite before committing, and don't commit if it fails.
+- Use Conventional Commits messages (feat:, fix:, test:, docs:, chore:, refactor:).
+- Before every commit, check that .env and any secrets are not staged. Never commit them.
+- Don't push. When I say "topic done", push all of the topic's commits after giving me the summary below.
+
+## During a topic
+- Keep explanations brief unless I ask you to explain something.
+- Still suggest improvements at the end of a step without building them.
 
 ## When I say "topic done: <name>"
-1. Append ONE detailed LEARNING.md entry for the whole topic, in the format below. It must be detailed enough that I could learn the topic from it without this chat.
-2. Update the Project map in LEARNING.md and add new terms to the Glossary.
-3. Never rewrite or delete earlier entries unless I ask you to fix a mistake.
-4. Give me 3 interview-style quiz questions about the topic. Wait for my answers, then tell me what I got right and wrong.
+1. In chat, go through every commit in the topic in order: the commit message, what changed, and why. Explain clearly enough that I could describe each one in an interview.
+2. Add a LEARNING.md entry for the topic with only the important things: key concepts, important design decisions and why, anything surprising or tricky, and 3 to 5 interview questions with model answers. No commit-by-commit detail there; that lives in git history. Update the Project map and Glossary if needed. Never rewrite or delete earlier entries unless I ask you to fix a mistake.
+3. Commit the LEARNING.md entry, then push.
 
 ## LEARNING.md entry format
 ### Topic N: <name>
 - Date
-- What was built: summary of the topic
-- Why it exists: the problem it solves in the project
-- How it works: walkthrough of the files and functions
-- Key concepts: each new concept explained simply, with an analogy where helpful
-- Design decisions: choice, alternatives, reasoning
-- How to verify: commands and expected output
+- Key concepts: each important concept explained simply, with an analogy where helpful
+- Design decisions: choice, alternatives, and why
+- Surprising or tricky: gotchas, bugs found, things that weren't obvious
 - Interview questions: 3 to 5 likely questions with model answers
-- Commits / files changed
 
 ## Tech choices
 - Python 3.11+, pyproject.toml, a .venv virtual environment
