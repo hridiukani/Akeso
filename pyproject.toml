@@ -12,6 +12,7 @@ dependencies = [
     "python-dotenv",
     "openai",
     "pytest",
+    "docker",
 ]
 
 [tool.pytest.ini_options]
