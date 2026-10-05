@@ -11,7 +11,13 @@ import pytest
 
 from repair_agent import sandbox as sandbox_module
 from repair_agent.paths import UnsafePathError
-from repair_agent.sandbox import DockerSandbox, FileTooLargeError, SandboxError
+from repair_agent.sandbox import (
+    IMAGE,
+    DockerSandbox,
+    FileTooLargeError,
+    SandboxError,
+    cleanup_leftover_containers,
+)
 
 
 @pytest.fixture
@@ -331,3 +337,45 @@ def test_size_limit_counts_bytes_not_characters() -> None:
     # The check runs before the container is needed, so no Docker required.
     with pytest.raises(FileTooLargeError):
         DockerSandbox(max_file_bytes=100).write_file("src/a.py", "é" * 60)
+
+
+# --- leftover cleanup ---
+
+
+@pytest.mark.docker
+def test_cleanup_removes_sandbox_left_by_hard_crash(task_dir: Path) -> None:
+    # A hard crash (process killed) means stop()/__exit__ never run, so simulate that
+    # by starting a sandbox and simply never stopping it.
+    abandoned = DockerSandbox()
+    abandoned.start(task_dir)
+    container_id = abandoned.container.id
+    client = docker.from_env()
+    assert client.containers.list(all=True, filters={"id": container_id})
+
+    removed = cleanup_leftover_containers()
+
+    assert abandoned.container.short_id in removed
+    assert client.containers.list(all=True, filters={"id": container_id}) == []
+
+
+@pytest.mark.docker
+def test_cleanup_leaves_unlabelled_containers_alone() -> None:
+    client = docker.from_env()
+    # Stands in for someone's unrelated container (e.g. another project's).
+    other = client.containers.create(IMAGE, command=["true"])
+    try:
+        cleanup_leftover_containers()
+
+        assert client.containers.list(all=True, filters={"id": other.id}) != []
+    finally:
+        other.remove(force=True)
+
+
+def test_cleanup_without_docker_gives_clear_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_docker() -> None:
+        raise docker.errors.DockerException("Error while fetching server API version")
+
+    monkeypatch.setattr(sandbox_module.docker, "from_env", no_docker)
+
+    with pytest.raises(SandboxError, match="Start Docker Desktop"):
+        cleanup_leftover_containers()

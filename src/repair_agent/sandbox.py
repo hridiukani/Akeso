@@ -214,6 +214,26 @@ class DockerSandbox:
         self.stop()
 
 
+def cleanup_leftover_containers() -> list[str]:
+    """Remove every container carrying our label and return their short ids.
+
+    The context manager removes containers even after exceptions, but not if this
+    process is killed outright (crash, Ctrl+C at the wrong moment, power loss). This
+    sweeps up those leftovers. Only containers with our label are touched. It also
+    removes sandboxes of runs still in progress, so don't use it while a run is active.
+    """
+    client = _connect()
+    label_filter = [f"{key}={value}" for key, value in LABEL.items()]
+    removed = []
+    for container in client.containers.list(all=True, filters={"label": label_filter}):
+        try:
+            container.remove(force=True)
+            removed.append(container.short_id)
+        except NotFound:
+            pass  # removed by someone else in the meantime
+    return removed
+
+
 def _connect() -> docker.DockerClient:
     """Connect to the Docker engine, or fail with instructions."""
     try:
