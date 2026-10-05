@@ -17,13 +17,13 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 
 ## Committing
 - You commit everything yourself. Make small, focused commits: each one a single meaningful change (for example "add config loader", "add tests for path safety"), typically 1 to 3 commits per prompt. There is no target count per topic: make as many commits as there are meaningful changes. Never make empty or padding commits.
-- Every commit must leave the project working. Don't commit if any of these fail (check pytest's own exit code):
-  - Before every commit, run the quick tests: `python -m pytest -m "not docker"`.
-  - When the change touches sandbox or environment code (sandbox.py, workspace.py, environment.py, checks.py, docker/), also run the Docker tests: `python -m pytest -m docker`.
-  - When I say "topic done", run the full suite (`python -m pytest`, Docker included) so everything is green before I push.
+- Every commit must leave the project working. Check pytest's own exit code, never one hidden behind a pipe:
+  - Before every commit, run the quick tests: `python -m pytest -m "not docker"`. Don't commit if they fail.
+  - Once at the end of each step, if that step touched sandbox, environment or agent code (sandbox.py, workspace.py, environment.py, checks.py, agent.py, tools.py, docker/), run the Docker tests: `python -m pytest -m docker`. If they fail, fix it in a new commit before moving on.
+  - Before I push (at "topic done"), run the full suite (`python -m pytest`, Docker included) so everything is green.
 - Tests that need Docker get the `docker` marker (`@pytest.mark.docker`).
 - Use Conventional Commits messages (feat:, fix:, test:, docs:, chore:, refactor:).
-- Before every commit, check that .env and any secrets are not staged. Never commit them.
+- Before every commit, check that no secrets are staged: never `.env` or any `.env.*` file. The only exception is `.env.example`, which holds placeholders and is meant to be committed.
 - Never push. I push all commits myself at the end of each session.
 
 ## During a topic
