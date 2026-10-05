@@ -6,6 +6,7 @@ import difflib
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from repair_agent.checks import trim_output
 from repair_agent.config import Settings, load_settings
@@ -14,7 +15,10 @@ from repair_agent.llm.cost import cost_usd
 from repair_agent.llm.provider import Provider, get_provider
 from repair_agent.llm.types import Message, Usage
 from repair_agent.paths import UnsafePathError, safe_relative_path
+from repair_agent.sandbox import DockerSandbox
 from repair_agent.workspace import LocalWorkspace
+
+Mode = Literal["docker", "local"]
 
 # Unusual markers rather than ``` fences, because file contents can contain fences.
 FILE_START = "<<<FILE: "
@@ -61,21 +65,27 @@ class ReplyError(ValueError):
 def run_oneshot(
     task_dir: str | Path,
     *,
-    confirm: bool = True,
+    mode: Mode = "docker",
+    confirm: bool | None = None,
     settings: Settings | None = None,
     provider: Provider | None = None,
     environment: Environment | None = None,
 ) -> OneshotResult:
     """Run one repair attempt on a copy of task_dir. The original is never modified.
 
+    mode: "docker" (default) runs everything in a locked-down container. "local" runs
+    the model's code directly on this machine and must be chosen explicitly.
     confirm: show a diff of the proposed change and ask before writing it and running
-    the checks.
-    settings/provider/environment: injectable for tests. environment must be unstarted;
-    run_oneshot starts it and always stops it.
+    the checks. Defaults to on for local runs and off for Docker, where the code can't
+    reach this machine.
+    settings/provider/environment: injectable for tests. An injected environment (must
+    be unstarted) takes priority over mode; run_oneshot starts it and always stops it.
     """
     settings = settings or load_settings()
     provider = provider or get_provider(settings)
-    env = environment or LocalWorkspace()
+    env = environment or make_environment(mode)
+    if confirm is None:
+        confirm = isinstance(env, LocalWorkspace)  # only host-side runs need a human check
     no_usage = Usage(input_tokens=0, output_tokens=0)
 
     with env:
@@ -106,6 +116,15 @@ def run_oneshot(
         summary = _last_line(after.output)
         reason = f"Checks pass: {summary}" if after.passed else f"Checks still fail: {summary}"
         return OneshotResult(after.passed, reason, usage, cost, rel_path)
+
+
+def make_environment(mode: Mode) -> Environment:
+    """A new, unstarted environment for the given mode."""
+    if mode == "docker":
+        return DockerSandbox()
+    if mode == "local":
+        return LocalWorkspace()
+    raise ValueError(f"mode must be 'docker' or 'local', got {mode!r}.")
 
 
 def build_prompt(env: Environment, failure_output: str) -> str:

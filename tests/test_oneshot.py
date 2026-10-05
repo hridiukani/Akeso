@@ -283,3 +283,68 @@ def test_rejected_confirmation_writes_nothing(
 
     assert result.reason.startswith("Change rejected by user")
     assert_failed_cleanly(result, task, spy)
+
+
+# --- mode and confirmation defaults ---
+
+
+def _docker_ready() -> bool:
+    try:
+        import docker
+
+        client = docker.from_env()
+        client.ping()
+        client.images.get("repair-agent-code:latest")
+        return True
+    except Exception:
+        return False
+
+
+def test_make_environment_by_mode() -> None:
+    assert isinstance(oneshot.make_environment("docker"), oneshot.DockerSandbox)
+    assert isinstance(oneshot.make_environment("local"), LocalWorkspace)
+    with pytest.raises(ValueError, match="mode must be"):
+        oneshot.make_environment("cloud")  # type: ignore[arg-type]
+
+
+def test_docker_is_the_default_mode(monkeypatch: pytest.MonkeyPatch, task: Path) -> None:
+    chosen: list[str] = []
+
+    def fake_make_environment(mode: str) -> LocalWorkspace:
+        chosen.append(mode)
+        return SpyWorkspace()  # stand-in so this test doesn't need Docker
+
+    monkeypatch.setattr(oneshot, "make_environment", fake_make_environment)
+
+    run_oneshot(task, confirm=False, settings=SETTINGS, provider=FakeProvider(reply("src/stats.py", FIXED_CODE)))
+
+    assert chosen == ["docker"]
+
+
+def test_local_run_asks_for_confirmation_by_default(
+    task: Path, spy: SpyWorkspace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prompts: list[str] = []
+    monkeypatch.setattr("builtins.input", lambda prompt: prompts.append(prompt) or "n")
+
+    result = run_oneshot(
+        task, settings=SETTINGS, provider=FakeProvider(reply("src/stats.py", FIXED_CODE)), environment=spy
+    )
+
+    assert len(prompts) == 1
+    assert result.reason.startswith("Change rejected by user")
+
+
+@pytest.mark.skipif(not _docker_ready(), reason="Docker not running or image not built")
+def test_docker_run_fixes_task_without_asking(task: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_prompt(prompt: str) -> str:
+        raise AssertionError("Docker runs must not ask for confirmation")
+
+    monkeypatch.setattr("builtins.input", no_prompt)
+    original = read_all(task)
+
+    result = run_oneshot(task, settings=SETTINGS, provider=FakeProvider(reply("src/stats.py", FIXED_CODE)))
+
+    assert result.passed, result.reason
+    assert result.reason.startswith("Checks pass")
+    assert read_all(task) == original
