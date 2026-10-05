@@ -440,3 +440,40 @@ def test_cleanup_script_all_removes_fresh_container(task_dir: Path, capsys: pyte
 )
 def test_docker_time_parsing(value: str, expected: datetime) -> None:
     assert _docker_time(value) == expected
+
+
+@pytest.mark.docker
+def test_cleanup_script_max_age_zero_removes_fresh_container(task_dir: Path) -> None:
+    fresh = DockerSandbox()
+    fresh.start(task_dir)
+    container_id = fresh.container.id
+
+    assert _load_cleanup_script().main(["--max-age-minutes", "0"]) == 0
+
+    assert docker.from_env().containers.list(all=True, filters={"id": container_id}) == []
+    fresh.stop()
+
+
+@pytest.mark.docker
+def test_cleanup_script_large_max_age_keeps_fresh_container(task_dir: Path) -> None:
+    with DockerSandbox() as fresh:
+        fresh.start(task_dir)
+
+        assert _load_cleanup_script().main(["--max-age-minutes", "30"]) == 0
+
+        assert docker.from_env().containers.list(all=True, filters={"id": fresh.container.id})
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--max-age-minutes", "-5"],  # negative
+        ["--max-age-minutes", "soon"],  # not a number
+        ["--all", "--max-age-minutes", "10"],  # contradictory
+    ],
+)
+def test_cleanup_script_rejects_bad_arguments(argv: list[str]) -> None:
+    # argparse exits with code 2 before touching Docker.
+    with pytest.raises(SystemExit) as exit_info:
+        _load_cleanup_script().main(argv)
+    assert exit_info.value.code == 2
