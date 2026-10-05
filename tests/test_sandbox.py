@@ -3,7 +3,9 @@
 Build the image with: python scripts/build_images.py
 """
 
+import importlib.util
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import docker
@@ -18,6 +20,7 @@ from repair_agent.sandbox import (
     SandboxError,
     cleanup_leftover_containers,
 )
+from repair_agent.sandbox import _docker_time
 
 
 @pytest.fixture
@@ -352,7 +355,9 @@ def test_cleanup_removes_sandbox_left_by_hard_crash(task_dir: Path) -> None:
     client = docker.from_env()
     assert client.containers.list(all=True, filters={"id": container_id})
 
-    removed = cleanup_leftover_containers()
+    # max_age=0 treats the just-created container as old enough, standing in for one
+    # left behind hours ago (Docker's creation time can't be faked).
+    removed = cleanup_leftover_containers(max_age=timedelta(0))
 
     assert abandoned.container.short_id in removed
     assert client.containers.list(all=True, filters={"id": container_id}) == []
@@ -364,7 +369,7 @@ def test_cleanup_leaves_unlabelled_containers_alone() -> None:
     # Stands in for someone's unrelated container (e.g. another project's).
     other = client.containers.create(IMAGE, command=["true"])
     try:
-        cleanup_leftover_containers()
+        cleanup_leftover_containers(max_age=None)  # the most aggressive mode
 
         assert client.containers.list(all=True, filters={"id": other.id}) != []
     finally:
@@ -379,3 +384,59 @@ def test_cleanup_without_docker_gives_clear_message(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(SandboxError, match="Start Docker Desktop"):
         cleanup_leftover_containers()
+
+
+def _load_cleanup_script():
+    """Import scripts/cleanup_containers.py (scripts/ isn't a package)."""
+    path = Path(__file__).resolve().parent.parent / "scripts" / "cleanup_containers.py"
+    spec = importlib.util.spec_from_file_location("cleanup_containers", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.docker
+def test_age_based_cleanup_keeps_fresh_container(task_dir: Path) -> None:
+    with DockerSandbox() as fresh:
+        fresh.start(task_dir)
+
+        removed = cleanup_leftover_containers()  # default: older than LEFTOVER_MAX_AGE
+
+        assert fresh.container.short_id not in removed
+        assert fresh.exec(["echo", "still here"], timeout=10).output.strip() == "still here"
+
+
+@pytest.mark.docker
+def test_cleanup_script_default_keeps_fresh_container(task_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with DockerSandbox() as fresh:
+        fresh.start(task_dir)
+
+        assert _load_cleanup_script().main([]) == 0
+
+        assert fresh.container.short_id not in capsys.readouterr().out
+        assert docker.from_env().containers.list(all=True, filters={"id": fresh.container.id})
+
+
+@pytest.mark.docker
+def test_cleanup_script_all_removes_fresh_container(task_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    fresh = DockerSandbox()
+    fresh.start(task_dir)
+    container_id, short_id = fresh.container.id, fresh.container.short_id
+
+    assert _load_cleanup_script().main(["--all"]) == 0
+
+    assert short_id in capsys.readouterr().out
+    assert docker.from_env().containers.list(all=True, filters={"id": container_id}) == []
+    fresh.stop()  # container already gone; stop() must still be safe
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("2026-10-05T03:38:21.478256052Z", datetime(2026, 10, 5, 3, 38, 21, 478256, tzinfo=timezone.utc)),
+        ("2026-10-05T03:38:21.5Z", datetime(2026, 10, 5, 3, 38, 21, 500000, tzinfo=timezone.utc)),
+        ("2026-10-05T03:38:21Z", datetime(2026, 10, 5, 3, 38, 21, tzinfo=timezone.utc)),
+    ],
+)
+def test_docker_time_parsing(value: str, expected: datetime) -> None:
+    assert _docker_time(value) == expected

@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import tarfile
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
@@ -28,6 +29,8 @@ USER = "agent"
 USER_ID = 1000  # must match the uid created in docker/code.Dockerfile
 # Lets us find (and clean up) our containers: docker ps -a --filter label=repair-agent
 LABEL = {"repair-agent": "sandbox"}
+# Labelled containers older than this are leftovers from crashed runs (no run lasts this long).
+LEFTOVER_MAX_AGE = timedelta(hours=1)
 
 # Exit codes from coreutils `timeout`: 124 after SIGTERM, 137 if it had to SIGKILL.
 _TIMEOUT_EXIT_CODES = (124, 137)
@@ -214,24 +217,41 @@ class DockerSandbox:
         self.stop()
 
 
-def cleanup_leftover_containers() -> list[str]:
-    """Remove every container carrying our label and return their short ids.
+def cleanup_leftover_containers(max_age: timedelta | None = LEFTOVER_MAX_AGE) -> list[str]:
+    """Remove our labelled containers older than max_age; return their short ids.
 
     The context manager removes containers even after exceptions, but not if this
     process is killed outright (crash, Ctrl+C at the wrong moment, power loss). This
-    sweeps up those leftovers. Only containers with our label are touched. It also
-    removes sandboxes of runs still in progress, so don't use it while a run is active.
+    sweeps up those leftovers. Only containers with our label are touched.
+
+    Age comes from Docker's own creation time. The default (1 hour) is far longer than
+    any run, so a run still in progress is never removed. max_age=None removes every
+    labelled container regardless of age, including ones in use.
     """
     client = _connect()
     label_filter = [f"{key}={value}" for key, value in LABEL.items()]
+    now = datetime.now(timezone.utc)
     removed = []
     for container in client.containers.list(all=True, filters={"label": label_filter}):
+        if max_age is not None and now - _docker_time(container.attrs["Created"]) < max_age:
+            continue  # too recent: may belong to a run that's still going
         try:
             container.remove(force=True)
             removed.append(container.short_id)
         except NotFound:
             pass  # removed by someone else in the meantime
     return removed
+
+
+def _docker_time(value: str) -> datetime:
+    """Parse Docker's RFC 3339 timestamp, e.g. '2026-10-05T03:38:21.478256052Z'.
+
+    Docker gives nanoseconds (9 digits) but datetime holds microseconds (6), so the
+    extra digits are dropped before parsing.
+    """
+    main, _, fraction = value.rstrip("Z").partition(".")
+    fraction = fraction[:6].ljust(6, "0")
+    return datetime.fromisoformat(f"{main}.{fraction}").replace(tzinfo=timezone.utc)
 
 
 def _connect() -> docker.DockerClient:
