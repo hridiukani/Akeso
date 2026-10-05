@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 
@@ -54,3 +55,26 @@ def trim_output(output: str, limit: int = DEFAULT_OUTPUT_LIMIT) -> str:
     if len(output) <= limit:
         return output
     return f"[...{len(output) - limit} characters trimmed ...]\n" + output[-limit:]
+
+
+# Parts of pytest output that change between runs even when nothing real changed.
+_VOLATILE = [
+    (re.compile(r"\x1b\[[0-9;]*m"), ""),  # terminal colour codes
+    (re.compile(r"\bin \d+(?:\.\d+)?s(?: \(\d+:\d\d:\d\d\))?"), "in <time>"),  # "in 0.05s (0:00:00)"
+    (re.compile(r"\b\d+(?:\.\d+)?s\b"), "<time>"),  # other durations, e.g. "0.12s call"
+    (re.compile(r"\b0x[0-9a-fA-F]+\b"), "0x<addr>"),  # memory addresses in reprs
+    (re.compile(r"pytest-of-[^/\s]+/pytest-\d+"), "pytest-of-<user>/pytest-<n>"),  # tmp_path dirs
+    (re.compile(r"repair-agent-[A-Za-z0-9_]+"), "repair-agent-<tmp>"),  # our workspace dirs
+    (re.compile(r"\[\.\.\. ?\d+ characters trimmed \.\.\.\]"), "[... characters trimmed ...]"),
+]
+
+
+def normalize_check_output(output: str) -> str:
+    """Remove run-to-run noise (timings, memory addresses, temp paths) from check output.
+
+    Two runs that fail in the same way normalise to the same text, so the agent loop
+    can tell when the model is stuck repeating an identical failure.
+    """
+    for pattern, replacement in _VOLATILE:
+        output = pattern.sub(replacement, output)
+    return "\n".join(line.rstrip() for line in output.strip().splitlines())

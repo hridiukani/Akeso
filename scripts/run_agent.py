@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from repair_agent.agent import DEFAULT_MAX_STEPS, run_agent
+from repair_agent.agent import run_agent
 from repair_agent.config import ConfigError
 from repair_agent.sandbox import SandboxError
 
@@ -19,7 +19,7 @@ from repair_agent.sandbox import SandboxError
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the repair agent on one task.")
     parser.add_argument("task", type=Path, help="path to a task folder, e.g. tasks/code/c001_mean")
-    parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="maximum model calls")
+    parser.add_argument("--max-steps", type=int, help="maximum model calls (default: AGENT_MAX_STEPS from .env, or 20)")
     args = parser.parse_args(argv)
 
     if not args.task.is_dir():

@@ -7,11 +7,12 @@ ourselves; that final check is the result.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path, PurePosixPath
 
-from repair_agent.config import Settings, load_settings
+from repair_agent.checks import normalize_check_output
+from repair_agent.config import AgentLimits, Settings, load_settings
 from repair_agent.environment import EnvError, Environment
 from repair_agent.llm.cost import cost_usd
 from repair_agent.llm.provider import Provider, get_provider
@@ -20,8 +21,6 @@ from repair_agent.paths import is_excluded_task_file
 from repair_agent.prompts import AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT, build_first_message
 from repair_agent.sandbox import DockerSandbox
 from repair_agent.tools import TOOL_DEFINITIONS, execute_tool
-
-DEFAULT_MAX_STEPS = 20
 
 # Files that define how the tests run. Anywhere in the task, these belong to the judge.
 JUDGE_CONFIG_NAMES = {"pytest.ini", "conftest.py", "pyproject.toml", "setup.cfg", "tox.ini"}
@@ -33,6 +32,9 @@ class StopReason(str, Enum):
 
     PASSED = "passed"
     MAX_STEPS = "max_steps"
+    MAX_COST = "max_cost"
+    MAX_TOKENS = "max_tokens"
+    REPEATED_FAILURE = "repeated_failure"  # the same failing check output N times in a row
     GAVE_UP = "gave_up"  # the model stopped calling tools without a real pass
     ERROR = "error"
 
@@ -54,6 +56,25 @@ class AgentResult:
     detail: str = ""  # human-readable explanation of the outcome
 
 
+class RepeatedFailureDetector:
+    """Notices when the checks fail the same way `limit` times in a row (the model is stuck)."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self._last: str | None = None
+        self._count = 0
+
+    def record(self, passed: bool, output: str) -> bool:
+        """Record one check run; True once the same failure has been seen `limit` times running."""
+        if passed:
+            self._last, self._count = None, 0
+            return False
+        normalized = normalize_check_output(output)
+        self._count = self._count + 1 if normalized == self._last else 1
+        self._last = normalized
+        return self._count >= self.limit
+
+
 @dataclass
 class RestoreReport:
     """What restore_judge changed: files put back and agent-created files removed."""
@@ -64,17 +85,25 @@ class RestoreReport:
 
 def run_agent(
     task_dir: str | Path,
-    max_steps: int = DEFAULT_MAX_STEPS,
+    max_steps: int | None = None,
     *,
+    limits: AgentLimits | None = None,
     settings: Settings | None = None,
     provider: Provider | None = None,
     environment: Environment | None = None,
 ) -> AgentResult:
-    """Run the agent on a copy of task_dir (in Docker unless an environment is injected)."""
+    """Run the agent on a copy of task_dir (in Docker unless an environment is injected).
+
+    Limits come from settings (.env) unless given; max_steps overrides just that one.
+    """
     task_dir = Path(task_dir)
     settings = settings or load_settings()
+    limits = limits or settings.limits
+    if max_steps is not None:
+        limits = replace(limits, max_steps=max_steps)
     provider = provider or get_provider(settings)
     env = environment or DockerSandbox()
+    stuck = RepeatedFailureDetector(limits.repeated_failure_limit)
     steps = input_tokens = output_tokens = 0
     cost = 0.0
     stop, detail = StopReason.ERROR, ""
@@ -97,7 +126,7 @@ def run_agent(
         messages = [Message.user(first)]
         try:
             while True:
-                if steps >= max_steps:
+                if steps >= limits.max_steps:
                     stop = StopReason.MAX_STEPS
                     break
                 response = provider.complete(AGENT_SYSTEM_PROMPT, messages, tools=TOOL_DEFINITIONS)
@@ -110,14 +139,25 @@ def run_agent(
                 if not response.tool_calls:
                     stop = StopReason.GAVE_UP  # upgraded to PASSED below if the final check passes
                     break
-                checks_passed = False
+                checks_passed = repeated = False
                 for call in response.tool_calls:
                     outcome = execute_tool(env, call)
                     messages.append(Message.tool_result(call.id, outcome.output, outcome.is_error))
-                    if call.name == "run_checks" and outcome.output.startswith("PASSED"):
-                        checks_passed = True
+                    if call.name == "run_checks" and not outcome.is_error:
+                        checks_passed = outcome.output.startswith("PASSED")
+                        repeated = stuck.record(checks_passed, outcome.output)
                 if checks_passed:
                     stop = StopReason.PASSED  # provisional: only our final check counts
+                    break
+                if repeated:
+                    stop = StopReason.REPEATED_FAILURE
+                    break
+                # Budgets are checked after each call, so one call can overshoot slightly.
+                if cost >= limits.max_cost_usd:
+                    stop = StopReason.MAX_COST
+                    break
+                if input_tokens + output_tokens >= limits.max_total_tokens:
+                    stop = StopReason.MAX_TOKENS
                     break
         except Exception as problem:  # e.g. the provider gave up after rate limits
             stop, detail = StopReason.ERROR, f"{type(problem).__name__}: {problem}"
