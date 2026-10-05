@@ -19,6 +19,9 @@ dependencies = [
 [tool.pytest.ini_options]
 # Only the harness's own tests. Task folders contain deliberately failing tests.
 testpaths = ["tests"]
+# Makes test helpers (tests/fakes.py) importable as `from fakes import ...` in any
+# import mode, without relying on pytest adding the test folder to sys.path itself.
+pythonpath = ["tests"]
 # A typo like @pytest.mark.dokcer becomes an error instead of a silently unmarked test.
 addopts = "--strict-markers"
 markers = [
