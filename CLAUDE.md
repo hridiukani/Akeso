@@ -17,7 +17,11 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 
 ## Committing
 - You commit everything yourself. Make small, focused commits: each one a single meaningful change (for example "add config loader", "add tests for path safety"), typically 1 to 3 commits per prompt. There is no target count per topic: make as many commits as there are meaningful changes. Never make empty or padding commits.
-- Every commit must leave the project working: run the offline test suite before committing, and don't commit if it fails.
+- Every commit must leave the project working. Don't commit if any of these fail (check pytest's own exit code):
+  - Before every commit, run the quick tests: `python -m pytest -m "not docker"`.
+  - When the change touches sandbox or environment code (sandbox.py, workspace.py, environment.py, checks.py, docker/), also run the Docker tests: `python -m pytest -m docker`.
+  - When I say "topic done", run the full suite (`python -m pytest`, Docker included) so everything is green before I push.
+- Tests that need Docker get the `docker` marker (`@pytest.mark.docker`).
 - Use Conventional Commits messages (feat:, fix:, test:, docs:, chore:, refactor:).
 - Before every commit, check that .env and any secrets are not staged. Never commit them.
 - Never push. I push all commits myself at the end of each session.
