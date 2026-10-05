@@ -14,7 +14,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:  # avoid an import cycle: checks.py imports this module
-    from repair_agent.checks import CheckResult
+    from akeso.checks import CheckResult
 
 
 class EnvError(Exception):

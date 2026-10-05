@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from repair_agent.checks import CheckResult, run_checks
-from repair_agent.workspace import LocalWorkspace
+from akeso.checks import CheckResult, run_checks
+from akeso.workspace import LocalWorkspace
 
 PROBE_NAME = "REPAIR_AGENT_TEST_SECRET"
 PROBE_VALUE = "fake-secret-value-123"

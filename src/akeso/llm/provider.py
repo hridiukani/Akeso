@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
-from repair_agent.config import Settings
-from repair_agent.llm.types import Message, ModelResponse, ToolDefinition
+from akeso.config import Settings
+from akeso.llm.types import Message, ModelResponse, ToolDefinition
 
 
 class Provider(Protocol):
@@ -30,7 +30,7 @@ def get_provider(settings: Settings) -> Provider:
     """Return the provider chosen by settings.provider."""
     if settings.provider == "groq":
         # Imported here so the rest of the code only needs this module, not the SDK-specific one.
-        from repair_agent.llm.groq_provider import GroqProvider
+        from akeso.llm.groq_provider import GroqProvider
 
         # load_settings already guarantees these are set for the active provider.
         assert settings.groq_api_key and settings.groq_model

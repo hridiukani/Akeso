@@ -11,9 +11,9 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
-from repair_agent.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
-from repair_agent.environment import EnvError, ExecResult, FileTooLargeError
-from repair_agent.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
+from akeso.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
+from akeso.environment import EnvError, ExecResult, FileTooLargeError
+from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
 WORKSPACE_PREFIX = "repair-agent-"
 

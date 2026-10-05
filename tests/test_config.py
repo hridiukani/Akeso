@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from repair_agent.config import AgentLimits, ConfigError, load_settings
+from akeso.config import AgentLimits, ConfigError, load_settings
 
 ENV_VARS = (
     "PROVIDER", "GROQ_API_KEY", "GROQ_MODEL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",

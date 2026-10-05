@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from repair_agent.config import PRICES, ConfigError
-from repair_agent.llm.types import Usage
+from akeso.config import PRICES, ConfigError
+from akeso.llm.types import Usage
 
 TOKENS_PER_MTOK = 1_000_000
 
@@ -18,7 +18,7 @@ def cost_usd(model: str, usage: Usage) -> float:
     if price is None:
         # Fail loudly: a silent $0 would make cost comparisons look better than they are.
         raise UnknownModelPriceError(
-            f"No price for model {model!r}. Add it to PRICES in src/repair_agent/config.py."
+            f"No price for model {model!r}. Add it to PRICES in src/akeso/config.py."
         )
     return (
         usage.input_tokens * price.input_per_mtok

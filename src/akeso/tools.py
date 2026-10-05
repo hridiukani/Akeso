@@ -14,11 +14,11 @@ from pathlib import PurePosixPath
 
 from jsonschema import Draft202012Validator, ValidationError
 
-from repair_agent.checks import CHECK_TIMEOUT_SECONDS, trim_output
-from repair_agent.environment import EnvError, Environment
-from repair_agent.llm.types import ToolCall, ToolDefinition
-from repair_agent.paths import UnsafePathError, safe_relative_path
-from repair_agent.sandbox import SandboxError
+from akeso.checks import CHECK_TIMEOUT_SECONDS, trim_output
+from akeso.environment import EnvError, Environment
+from akeso.llm.types import ToolCall, ToolDefinition
+from akeso.paths import UnsafePathError, safe_relative_path
+from akeso.sandbox import SandboxError
 
 COMMAND_TIMEOUT_SECONDS = 60
 OUTPUT_LIMIT = 6000  # characters of command/test output returned to the model (the end is kept)

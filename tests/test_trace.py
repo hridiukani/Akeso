@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 
 from fakes import FakeEnvironment, ScriptedProvider, text_reply, tool_reply
-from repair_agent.agent import StopReason, run_agent
-from repair_agent.config import AgentLimits, Settings
-from repair_agent.prompts import AGENT_PROMPT_VERSION
-from repair_agent.trace import TraceWriter, new_run_id, read_trace, trace_path
+from akeso.agent import StopReason, run_agent
+from akeso.config import AgentLimits, Settings
+from akeso.prompts import AGENT_PROMPT_VERSION
+from akeso.trace import TraceWriter, new_run_id, read_trace, trace_path
 
 FAKE_KEY = "gsk-fake-key-that-must-never-be-traced"
 SETTINGS = Settings(provider="groq", groq_model="openai/gpt-oss-120b", anthropic_model=None, groq_api_key=FAKE_KEY)

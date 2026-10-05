@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from repair_agent.workspace import cleanup_workspace, create_workspace
+from akeso.workspace import cleanup_workspace, create_workspace
 
 
 @pytest.fixture

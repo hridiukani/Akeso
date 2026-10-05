@@ -6,7 +6,7 @@ results from different prompt versions are different experiments.
 
 from __future__ import annotations
 
-from repair_agent.checks import trim_output
+from akeso.checks import trim_output
 
 AGENT_PROMPT_VERSION = "agent-v2"  # v2: run_command no longer claims "no network" (wrong locally)
 

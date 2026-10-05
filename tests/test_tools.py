@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from repair_agent import tools
-from repair_agent.environment import Environment
-from repair_agent.sandbox import DockerSandbox
-from repair_agent.workspace import LocalWorkspace
+from akeso import tools
+from akeso.environment import Environment
+from akeso.sandbox import DockerSandbox
+from akeso.workspace import LocalWorkspace
 
 BUGGY = '''def mean(numbers):
     """Average of numbers."""

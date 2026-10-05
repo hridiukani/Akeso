@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from repair_agent.trace import read_trace
+from akeso.trace import read_trace
 
 PREVIEW_LINES = 8
 

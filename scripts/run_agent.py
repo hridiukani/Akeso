@@ -11,9 +11,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from repair_agent.agent import run_agent
-from repair_agent.config import ConfigError
-from repair_agent.sandbox import SandboxError
+from akeso.agent import run_agent
+from akeso.config import ConfigError
+from akeso.sandbox import SandboxError
 
 
 def main(argv: list[str] | None = None) -> int:

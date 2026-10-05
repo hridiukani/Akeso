@@ -9,11 +9,11 @@ from typing import Any
 
 import pytest
 
-from repair_agent import oneshot
-from repair_agent.config import Settings
-from repair_agent.llm.types import Message, ModelResponse, ToolDefinition, Usage
-from repair_agent.oneshot import ReplyError, parse_reply, resolve_src_path, run_oneshot
-from repair_agent.workspace import LocalWorkspace
+from akeso import oneshot
+from akeso.config import Settings
+from akeso.llm.types import Message, ModelResponse, ToolDefinition, Usage
+from akeso.oneshot import ReplyError, parse_reply, resolve_src_path, run_oneshot
+from akeso.workspace import LocalWorkspace
 
 FIXED_CODE = "def mean(numbers):\n    return sum(numbers) / len(numbers)\n"
 

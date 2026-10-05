@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from repair_agent.environment import Environment, FileTooLargeError
-from repair_agent.paths import UnsafePathError
-from repair_agent.sandbox import DockerSandbox
-from repair_agent.workspace import LocalWorkspace
+from akeso.environment import Environment, FileTooLargeError
+from akeso.paths import UnsafePathError
+from akeso.sandbox import DockerSandbox
+from akeso.workspace import LocalWorkspace
 
 IMPLEMENTATIONS = [
     pytest.param("local", id="local"),

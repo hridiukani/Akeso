@@ -2,9 +2,9 @@
 
 import pytest
 
-from repair_agent.config import PRICES
-from repair_agent.llm.cost import UnknownModelPriceError, cost_usd
-from repair_agent.llm.types import Usage
+from akeso.config import PRICES
+from akeso.llm.cost import UnknownModelPriceError, cost_usd
+from akeso.llm.types import Usage
 
 
 def test_sonnet_5_cost() -> None:

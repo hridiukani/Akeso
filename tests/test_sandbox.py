@@ -11,16 +11,16 @@ from pathlib import Path
 import docker
 import pytest
 
-from repair_agent import sandbox as sandbox_module
-from repair_agent.paths import UnsafePathError
-from repair_agent.sandbox import (
+from akeso import sandbox as sandbox_module
+from akeso.paths import UnsafePathError
+from akeso.sandbox import (
     IMAGE,
     DockerSandbox,
     FileTooLargeError,
     SandboxError,
     cleanup_leftover_containers,
 )
-from repair_agent.sandbox import _docker_time
+from akeso.sandbox import _docker_time
 
 
 @pytest.fixture

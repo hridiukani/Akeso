@@ -6,9 +6,9 @@ from typing import Any
 import pytest
 
 from fakes import FakeEnvironment
-from repair_agent.llm.types import ToolCall
-from repair_agent.sandbox import SandboxError
-from repair_agent.tools import execute_tool
+from akeso.llm.types import ToolCall
+from akeso.sandbox import SandboxError
+from akeso.tools import execute_tool
 
 
 @pytest.fixture

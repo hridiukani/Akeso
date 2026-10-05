@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 
 from fakes import FakeEnvironment, ScriptedProvider, text_reply, tool_reply
-from repair_agent.agent import StopReason, run_agent
-from repair_agent.config import AgentLimits, Settings
-from repair_agent.environment import ExecResult
-from repair_agent.llm.types import Usage
+from akeso.agent import StopReason, run_agent
+from akeso.config import AgentLimits, Settings
+from akeso.environment import ExecResult
+from akeso.llm.types import Usage
 
 GROQ = Settings(provider="groq", groq_model="openai/gpt-oss-120b", anthropic_model=None, groq_api_key="fake")
 SONNET = Settings(provider="anthropic", groq_model=None, anthropic_model="claude-sonnet-5", anthropic_api_key="fake")

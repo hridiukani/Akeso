@@ -4,7 +4,7 @@ from pathlib import PurePosixPath
 
 import pytest
 
-from repair_agent.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
+from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
 
 @pytest.mark.parametrize(

@@ -6,10 +6,10 @@ from collections.abc import Callable, Sequence
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
-from repair_agent.checks import CheckResult
-from repair_agent.environment import ExecResult
-from repair_agent.llm.types import Message, ModelResponse, ToolCall, ToolDefinition, Usage
-from repair_agent.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
+from akeso.checks import CheckResult
+from akeso.environment import ExecResult
+from akeso.llm.types import Message, ModelResponse, ToolCall, ToolDefinition, Usage
+from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
 # Decides the result of run_checks from the current files: returns (passed, output).
 ChecksRule = Callable[[dict[str, str]], tuple[bool, str]]

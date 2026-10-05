@@ -8,15 +8,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from repair_agent.checks import trim_output
-from repair_agent.config import Settings, load_settings
-from repair_agent.environment import Environment
-from repair_agent.llm.cost import cost_usd
-from repair_agent.llm.provider import Provider, get_provider
-from repair_agent.llm.types import Message, Usage
-from repair_agent.paths import UnsafePathError, safe_relative_path
-from repair_agent.sandbox import DockerSandbox
-from repair_agent.workspace import LocalWorkspace
+from akeso.checks import trim_output
+from akeso.config import Settings, load_settings
+from akeso.environment import Environment
+from akeso.llm.cost import cost_usd
+from akeso.llm.provider import Provider, get_provider
+from akeso.llm.types import Message, Usage
+from akeso.paths import UnsafePathError, safe_relative_path
+from akeso.sandbox import DockerSandbox
+from akeso.workspace import LocalWorkspace
 
 Mode = Literal["docker", "local"]
 

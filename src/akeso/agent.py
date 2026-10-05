@@ -12,17 +12,17 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from pathlib import Path, PurePosixPath
 
-from repair_agent.checks import CheckResult, normalize_check_output, trim_output
-from repair_agent.config import AgentLimits, Settings, load_settings
-from repair_agent.environment import EnvError, Environment
-from repair_agent.llm.cost import cost_usd
-from repair_agent.llm.provider import Provider, get_provider
-from repair_agent.llm.types import Message
-from repair_agent.paths import is_excluded_task_file
-from repair_agent.prompts import AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT, build_first_message
-from repair_agent.sandbox import DockerSandbox
-from repair_agent.tools import execute_tool, tool_definitions
-from repair_agent.trace import DEFAULT_TRACE_DIR, TraceWriter, new_run_id, trace_path
+from akeso.checks import CheckResult, normalize_check_output, trim_output
+from akeso.config import AgentLimits, Settings, load_settings
+from akeso.environment import EnvError, Environment
+from akeso.llm.cost import cost_usd
+from akeso.llm.provider import Provider, get_provider
+from akeso.llm.types import Message
+from akeso.paths import is_excluded_task_file
+from akeso.prompts import AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT, build_first_message
+from akeso.sandbox import DockerSandbox
+from akeso.tools import execute_tool, tool_definitions
+from akeso.trace import DEFAULT_TRACE_DIR, TraceWriter, new_run_id, trace_path
 
 # Files that define how the tests run. Anywhere in the task, these belong to the judge.
 JUDGE_CONFIG_NAMES = {"pytest.ini", "conftest.py", "pyproject.toml", "setup.cfg", "tox.ini"}

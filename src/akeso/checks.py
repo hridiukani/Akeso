@@ -6,7 +6,7 @@ import re
 import time
 from dataclasses import dataclass
 
-from repair_agent.environment import Environment
+from akeso.environment import Environment
 
 CHECK_TIMEOUT_SECONDS = 60
 DEFAULT_OUTPUT_LIMIT = 4000

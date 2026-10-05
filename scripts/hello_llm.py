@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import sys
 
-from repair_agent.config import ConfigError, Settings, load_settings
-from repair_agent.llm.cost import cost_usd
-from repair_agent.llm.provider import get_provider
-from repair_agent.llm.types import Message
+from akeso.config import ConfigError, Settings, load_settings
+from akeso.llm.cost import cost_usd
+from akeso.llm.provider import get_provider
+from akeso.llm.types import Message
 
 QUESTION = "What is 2 + 2? Answer in one word."
 

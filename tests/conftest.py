@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from repair_agent.sandbox import IMAGE, SandboxError, cleanup_leftover_containers
+from akeso.sandbox import IMAGE, SandboxError, cleanup_leftover_containers
 
 # Set during collection: True when docker-marked tests were selected and Docker works.
 _DOCKER_TESTS_WILL_RUN = pytest.StashKey[bool]()

@@ -11,7 +11,7 @@ from typing import Any
 
 import openai
 
-from repair_agent.llm.types import (
+from akeso.llm.types import (
     Message,
     ModelResponse,
     StopReason,

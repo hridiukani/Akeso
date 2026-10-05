@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 
 from fakes import ScriptedProvider, text_reply, tool_reply
-from repair_agent.agent import StopReason, restore_judge, run_agent
-from repair_agent.config import Settings
-from repair_agent.prompts import AGENT_PROMPT_VERSION
-from repair_agent.environment import Environment
-from repair_agent.sandbox import DockerSandbox
-from repair_agent.workspace import LocalWorkspace
+from akeso.agent import StopReason, restore_judge, run_agent
+from akeso.config import Settings
+from akeso.prompts import AGENT_PROMPT_VERSION
+from akeso.environment import Environment
+from akeso.sandbox import DockerSandbox
+from akeso.workspace import LocalWorkspace
 
 BUGGY = "def mean(numbers):\n    return sum(numbers) / (len(numbers) - 1)\n"
 TESTS = "from stats import mean\n\n\ndef test_mean():\n    assert mean([2, 4, 6]) == 4\n"

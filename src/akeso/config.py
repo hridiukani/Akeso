@@ -107,7 +107,7 @@ def load_settings(env_file: str | Path = ".env") -> Settings:
     if model not in PRICES:
         raise ConfigError(
             f"{prefix}_MODEL={model!r} has no entry in PRICES. "
-            "Add its price to PRICES in src/repair_agent/config.py, or fix the model name."
+            "Add its price to PRICES in src/akeso/config.py, or fix the model name."
         )
 
     defaults = AgentLimits()

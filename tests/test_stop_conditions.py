@@ -2,8 +2,8 @@
 
 import pytest
 
-from repair_agent.agent import RepeatedFailureDetector
-from repair_agent.checks import normalize_check_output
+from akeso.agent import RepeatedFailureDetector
+from akeso.checks import normalize_check_output
 
 FAILURE_RUN_1 = """\
 F..                                                                      [100%]

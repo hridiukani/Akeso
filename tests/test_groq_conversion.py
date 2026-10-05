@@ -10,13 +10,13 @@ from typing import Any
 
 import pytest
 
-from repair_agent.llm.groq_provider import (
+from akeso.llm.groq_provider import (
     _from_openai_response,
     _parse_arguments,
     _to_openai_messages,
     _to_openai_tool,
 )
-from repair_agent.llm.types import Message, ToolCall, ToolDefinition, Usage
+from akeso.llm.types import Message, ToolCall, ToolDefinition, Usage
 
 
 def fake_response(

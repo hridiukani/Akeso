@@ -13,7 +13,7 @@ import argparse
 import sys
 from datetime import timedelta
 
-from repair_agent.sandbox import LABEL, LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers
+from akeso.sandbox import LABEL, LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers
 
 
 def _minutes(text: str) -> float:

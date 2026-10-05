@@ -14,7 +14,7 @@ from pathlib import Path
 import docker
 import pytest
 
-from repair_agent.sandbox import DockerSandbox
+from akeso.sandbox import DockerSandbox
 
 pytestmark = pytest.mark.docker
 
