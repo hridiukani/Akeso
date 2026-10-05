@@ -1,7 +1,8 @@
-"""The one place that decides whether a model-supplied path is safe to use.
+"""The one place for path rules: which paths are safe, and which task files are copied.
 
 Paths from the model are untrusted. Every file operation (one-shot replies, sandbox
-read/write/list) goes through safe_relative_path, so the rules can't drift apart.
+read/write/list) goes through safe_relative_path, and every task copy (LocalWorkspace
+and DockerSandbox) goes through is_excluded_task_file, so the rules can't drift apart.
 """
 
 from __future__ import annotations
@@ -38,3 +39,22 @@ def safe_relative_path(path: str) -> PurePosixPath:
     if ".." in normalised.parts:
         raise UnsafePathError(f"path {path!r} contains '..' and could escape the base folder.")
     return normalised
+
+
+# What is never copied from a task folder into a run environment (LocalWorkspace or
+# DockerSandbox). Extend these to exclude more.
+_EXCLUDED_NAMES = {".git", "__pycache__", ".pytest_cache"}  # folders: everything inside goes too
+_EXCLUDED_PREFIXES = (".env",)  # .env, .env.local, .env.example, ...: may hold secrets
+_EXCLUDED_SUFFIXES = (".pyc",)  # bytecode from earlier runs
+
+
+def is_excluded_task_file(path: str) -> bool:
+    """True if this file or folder inside a task must never be copied into a run.
+
+    Every part of the path is checked, so anything inside an excluded folder (like
+    .git/config) is excluded too.
+    """
+    parts = PurePosixPath(path.replace("\\", "/")).parts
+    if any(part in _EXCLUDED_NAMES or part.startswith(_EXCLUDED_PREFIXES) for part in parts):
+        return True
+    return bool(parts) and parts[-1].endswith(_EXCLUDED_SUFFIXES)

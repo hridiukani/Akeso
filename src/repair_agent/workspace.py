@@ -13,12 +13,15 @@ from types import TracebackType
 
 from repair_agent.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
 from repair_agent.environment import EnvError, ExecResult, FileTooLargeError
-from repair_agent.paths import UnsafePathError, safe_relative_path
+from repair_agent.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
 WORKSPACE_PREFIX = "repair-agent-"
 
-# Caches from earlier host runs could make results depend on stale state, so don't copy them.
-_IGNORED = shutil.ignore_patterns("__pycache__", ".pytest_cache", "*.pyc")
+
+def _ignore_excluded(directory: str, names: list[str]) -> set[str]:
+    """copytree callback: skip the same files the sandbox skips (secrets, .git, caches)."""
+    return {name for name in names if is_excluded_task_file(name)}
+
 
 # The only parent variables local task code may see. Everything else (API keys, tokens,
 # personal settings) is left out. PATH lets tests find programs; SYSTEMROOT is required
@@ -50,7 +53,7 @@ def create_workspace(task_dir: str | Path) -> Path:
     workspace = Path(tempfile.mkdtemp(prefix=WORKSPACE_PREFIX))
     # symlinks=False copies the files a link points to rather than the link itself,
     # so edits in the workspace can never write through a link into the original.
-    shutil.copytree(source, workspace, symlinks=False, ignore=_IGNORED, dirs_exist_ok=True)
+    shutil.copytree(source, workspace, symlinks=False, ignore=_ignore_excluded, dirs_exist_ok=True)
     return workspace
 
 

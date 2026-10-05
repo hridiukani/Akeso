@@ -1,10 +1,38 @@
-"""Tests for the shared path-safety rules."""
+"""Tests for the shared path rules: path safety and task-copy exclusions."""
 
 from pathlib import PurePosixPath
 
 import pytest
 
-from repair_agent.paths import UnsafePathError, safe_relative_path
+from repair_agent.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".env",
+        ".env.local",
+        ".env.example",
+        "src/.env",
+        ".git",
+        ".git/config",
+        ".git\\objects\\ab\\cd",
+        "__pycache__",
+        "src/__pycache__/stats.cpython-311.pyc",
+        "src/stats.pyc",
+        ".pytest_cache/v/cache/lastfailed",
+    ],
+)
+def test_excluded_task_files(path: str) -> None:
+    assert is_excluded_task_file(path)
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["src/stats.py", "tests/test_stats.py", "README.md", "pytest.ini", "src/environment.py", "src/git_utils.py"],
+)
+def test_normal_task_files_are_copied(path: str) -> None:
+    assert not is_excluded_task_file(path)
 
 
 @pytest.mark.parametrize(

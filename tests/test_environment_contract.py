@@ -81,6 +81,30 @@ def test_list_files(env: Environment) -> None:
     assert env.list_files("src") == ["src/code.py"]
 
 
+def test_secrets_git_and_caches_never_copied(make_env: EnvFactory, task_dir: Path) -> None:
+    secret = "ANTHROPIC_API_KEY=sk-ant-should-never-be-copied"
+    (task_dir / ".env").write_text(secret)
+    (task_dir / ".env.local").write_text(secret)
+    (task_dir / "src" / ".env").write_text(secret)
+    (task_dir / ".git").mkdir()
+    (task_dir / ".git" / "config").write_text("[core]\n")
+    (task_dir / "src" / "__pycache__").mkdir()
+    (task_dir / "src" / "__pycache__" / "code.cpython-311.pyc").write_bytes(b"stale")
+    (task_dir / "src" / "old.pyc").write_bytes(b"stale")
+
+    env = make_env()  # copies the task now, with the extra files present
+
+    assert env.list_files() == ["pytest.ini", "src/code.py", "tests/test_code.py"]
+    with pytest.raises(FileNotFoundError):
+        env.read_file(".env")
+    # Belt and braces: nothing anywhere in the copy contains the secret.
+    search = env.exec(
+        ["python", "-c", "import pathlib; print([str(p) for p in pathlib.Path('.').rglob('*') if p.is_file() and b'sk-ant' in p.read_bytes()])"],
+        timeout=30,
+    )
+    assert search.output.strip() == "[]"
+
+
 def test_original_task_unchanged(env: Environment, task_dir: Path) -> None:
     env.write_file("src/code.py", "VALUE = 99\n")
 

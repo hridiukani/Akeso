@@ -18,7 +18,7 @@ from docker.models.containers import Container
 
 from repair_agent.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
 from repair_agent.environment import EnvError, ExecResult, FileTooLargeError
-from repair_agent.paths import UnsafePathError, safe_relative_path
+from repair_agent.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
 __all__ = ["DockerSandbox", "ExecResult", "FileTooLargeError", "SandboxError"]
 
@@ -32,7 +32,6 @@ LABEL = {"repair-agent": "sandbox"}
 # Exit codes from coreutils `timeout`: 124 after SIGTERM, 137 if it had to SIGKILL.
 _TIMEOUT_EXIT_CODES = (124, 137)
 _KILL_GRACE_SECONDS = 2
-_SKIPPED_NAMES = {"__pycache__", ".pytest_cache"}
 
 
 class SandboxError(EnvError):
@@ -254,8 +253,8 @@ def _tar_folder(folder: Path) -> bytes:
     would be read-only for the non-root user that edits them.
     """
     def as_sandbox_user(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
-        if _SKIPPED_NAMES.intersection(Path(info.name).parts) or info.name.endswith(".pyc"):
-            return None
+        if is_excluded_task_file(info.name):
+            return None  # never copied: secrets, .git, caches
         info.uid = info.gid = USER_ID
         info.uname = info.gname = USER
         # Windows doesn't have Unix permissions, so set sensible ones explicitly.
