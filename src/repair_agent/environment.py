@@ -54,6 +54,10 @@ class Environment(Protocol):
 
     def write_file(self, path: str, content: str) -> None: ...
 
+    def delete_file(self, path: str) -> None:
+        """Delete a file. Deleting a file that doesn't exist does nothing; folders are refused."""
+        ...
+
     def list_files(self, path: str = ".") -> list[str]:
         """Every file under path, relative to the task root, sorted."""
         ...

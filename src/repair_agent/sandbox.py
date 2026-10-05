@@ -172,6 +172,17 @@ class DockerSandbox:
             archive.addfile(info, io.BytesIO(data))
         container.put_archive(WORKDIR, buffer.getvalue())
 
+    def delete_file(self, path: str) -> None:
+        """Delete a file relative to /workspace (a no-op if it doesn't exist)."""
+        rel = _file_path(path)
+        self._require_started()
+        # Argument list (no shell) and "--" so a name starting with "-" isn't read as an option.
+        result = self.exec(["rm", "-f", "--", rel.as_posix()], timeout=30)
+        if result.exit_code != 0:
+            if "Is a directory" in result.output:
+                raise IsADirectoryError(f"{rel} is a directory, not a file.")
+            raise SandboxError(f"Deleting {rel} failed: {result.output.strip()}")
+
     def list_files(self, path: str = ".") -> list[str]:
         """Return every file under path (recursively), relative to /workspace, sorted."""
         rel = safe_relative_path(path)

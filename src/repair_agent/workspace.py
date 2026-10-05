@@ -123,6 +123,13 @@ class LocalWorkspace:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
 
+    def delete_file(self, path: str) -> None:
+        rel, target = self._resolve(path)
+        if target.is_symlink() or target.is_file():
+            target.unlink()  # a link is removed itself, never its target
+        elif target.is_dir():
+            raise IsADirectoryError(f"{rel} is a directory, not a file.")
+
     def list_files(self, path: str = ".") -> list[str]:
         rel, base = self._resolve(path, allow_root=True)
         if not base.exists():

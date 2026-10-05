@@ -105,6 +105,20 @@ def test_secrets_git_and_caches_never_copied(make_env: EnvFactory, task_dir: Pat
     assert search.output.strip() == "[]"
 
 
+def test_delete_file(env: Environment, task_dir: Path) -> None:
+    env.write_file("src/extra/conftest.py", "import pytest\n")
+
+    env.delete_file("src/extra/conftest.py")
+    env.delete_file("src/extra/conftest.py")  # already gone: no error
+
+    assert "src/extra/conftest.py" not in env.list_files()
+    with pytest.raises(IsADirectoryError):
+        env.delete_file("src")
+    with pytest.raises(UnsafePathError):
+        env.delete_file("../outside.py")
+    assert (task_dir / "src" / "code.py").exists()  # the original task is untouched
+
+
 def test_original_task_unchanged(env: Environment, task_dir: Path) -> None:
     env.write_file("src/code.py", "VALUE = 99\n")
 
