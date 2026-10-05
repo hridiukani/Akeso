@@ -290,18 +290,6 @@ def test_rejected_confirmation_writes_nothing(
 # --- mode and confirmation defaults ---
 
 
-def _docker_ready() -> bool:
-    try:
-        import docker
-
-        client = docker.from_env()
-        client.ping()
-        client.images.get("repair-agent-code:latest")
-        return True
-    except Exception:
-        return False
-
-
 def test_make_environment_by_mode() -> None:
     assert isinstance(oneshot.make_environment("docker"), oneshot.DockerSandbox)
     assert isinstance(oneshot.make_environment("local"), LocalWorkspace)
@@ -337,7 +325,7 @@ def test_local_run_asks_for_confirmation_by_default(
     assert result.reason.startswith("Change rejected by user")
 
 
-@pytest.mark.skipif(not _docker_ready(), reason="Docker not running or image not built")
+@pytest.mark.docker
 def test_docker_run_fixes_task_without_asking(task: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def no_prompt(prompt: str) -> str:
         raise AssertionError("Docker runs must not ask for confirmation")

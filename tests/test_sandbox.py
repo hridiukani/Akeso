@@ -1,4 +1,4 @@
-"""Tests for DockerSandbox. They need Docker running and the image built; otherwise they skip.
+"""Tests for DockerSandbox. Tests marked "docker" skip when Docker or the image is missing.
 
 Build the image with: python scripts/build_images.py
 """
@@ -11,22 +11,7 @@ import pytest
 
 from repair_agent import sandbox as sandbox_module
 from repair_agent.paths import UnsafePathError
-from repair_agent.sandbox import IMAGE, DockerSandbox, FileTooLargeError, SandboxError
-
-
-def _docker_ready() -> bool:
-    try:
-        client = docker.from_env()
-        client.ping()
-        client.images.get(IMAGE)
-        return True
-    except Exception:
-        return False
-
-
-needs_docker = pytest.mark.skipif(
-    not _docker_ready(), reason=f"Docker not running or {IMAGE} not built"
-)
+from repair_agent.sandbox import DockerSandbox, FileTooLargeError, SandboxError
 
 
 @pytest.fixture
@@ -50,7 +35,7 @@ def running(task_dir: Path):
 # --- isolation settings ---
 
 
-@needs_docker
+@pytest.mark.docker
 def test_container_is_locked_down(running: DockerSandbox) -> None:
     container = running.container
     assert container is not None
@@ -65,7 +50,7 @@ def test_container_is_locked_down(running: DockerSandbox) -> None:
     assert container.labels == {"repair-agent": "sandbox"}
 
 
-@needs_docker
+@pytest.mark.docker
 def test_runs_as_non_root_in_workspace(running: DockerSandbox) -> None:
     result = running.exec("whoami && pwd", timeout=10)
 
@@ -73,7 +58,7 @@ def test_runs_as_non_root_in_workspace(running: DockerSandbox) -> None:
     assert result.output.split() == ["agent", "/workspace"]
 
 
-@needs_docker
+@pytest.mark.docker
 def test_no_network(running: DockerSandbox) -> None:
     code = "import socket; socket.create_connection(('1.1.1.1', 53), timeout=3)"
 
@@ -83,7 +68,7 @@ def test_no_network(running: DockerSandbox) -> None:
     assert "unreachable" in result.output.lower()
 
 
-@needs_docker
+@pytest.mark.docker
 def test_host_environment_not_passed(task_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("REPAIR_AGENT_PROBE", "host-secret-value")
     with DockerSandbox() as sandbox:
@@ -98,7 +83,7 @@ def test_host_environment_not_passed(task_dir: Path, monkeypatch: pytest.MonkeyP
 # --- files ---
 
 
-@needs_docker
+@pytest.mark.docker
 def test_task_files_copied_and_editable(running: DockerSandbox) -> None:
     assert running.exec("cat src/code.py", timeout=10).output == "VALUE = 1\n"
 
@@ -108,14 +93,14 @@ def test_task_files_copied_and_editable(running: DockerSandbox) -> None:
     assert edit.output == "VALUE = 2\n"
 
 
-@needs_docker
+@pytest.mark.docker
 def test_caches_are_not_copied(running: DockerSandbox) -> None:
     result = running.exec("test -e src/__pycache__", timeout=10)
 
     assert result.exit_code == 1  # does not exist
 
 
-@needs_docker
+@pytest.mark.docker
 def test_original_unchanged_after_editing_in_container(
     running: DockerSandbox, task_dir: Path
 ) -> None:
@@ -127,7 +112,7 @@ def test_original_unchanged_after_editing_in_container(
 # --- exec ---
 
 
-@needs_docker
+@pytest.mark.docker
 def test_exec_returns_exit_code_and_combined_output(running: DockerSandbox) -> None:
     result = running.exec("echo out; echo err >&2; exit 3", timeout=10)
 
@@ -135,7 +120,7 @@ def test_exec_returns_exit_code_and_combined_output(running: DockerSandbox) -> N
     assert "out" in result.output and "err" in result.output
 
 
-@needs_docker
+@pytest.mark.docker
 def test_exec_timeout_kills_command(running: DockerSandbox) -> None:
     start = time.monotonic()
 
@@ -149,7 +134,7 @@ def test_exec_timeout_kills_command(running: DockerSandbox) -> None:
 # --- lifecycle ---
 
 
-@needs_docker
+@pytest.mark.docker
 def test_container_removed_after_error_in_with_block(task_dir: Path) -> None:
     with pytest.raises(RuntimeError):
         with DockerSandbox() as sandbox:
@@ -161,7 +146,7 @@ def test_container_removed_after_error_in_with_block(task_dir: Path) -> None:
     assert remaining == []
 
 
-@needs_docker
+@pytest.mark.docker
 def test_stop_twice_is_safe(task_dir: Path) -> None:
     sandbox = DockerSandbox()
     sandbox.start(task_dir)
@@ -180,7 +165,7 @@ def test_exec_before_start_raises() -> None:
 # --- clear errors ---
 
 
-@needs_docker
+@pytest.mark.docker
 def test_missing_image_gives_build_instructions(task_dir: Path) -> None:
     with pytest.raises(SandboxError, match="build_images.py"):
         DockerSandbox(image="repair-agent-does-not-exist:latest").start(task_dir)
@@ -201,12 +186,12 @@ def test_docker_not_running_gives_clear_message(
 # --- read_file / write_file / list_files ---
 
 
-@needs_docker
+@pytest.mark.docker
 def test_read_file(running: DockerSandbox) -> None:
     assert running.read_file("src/code.py") == "VALUE = 1\n"
 
 
-@needs_docker
+@pytest.mark.docker
 def test_write_then_read_round_trip(running: DockerSandbox) -> None:
     running.write_file("src/code.py", "VALUE = 2\n")
 
@@ -214,7 +199,7 @@ def test_write_then_read_round_trip(running: DockerSandbox) -> None:
     assert running.exec("cat src/code.py", timeout=10).output == "VALUE = 2\n"
 
 
-@needs_docker
+@pytest.mark.docker
 def test_write_creates_folders_owned_by_agent(running: DockerSandbox) -> None:
     running.write_file("src/new/deep/mod.py", "X = 1\n")
 
@@ -224,7 +209,7 @@ def test_write_creates_folders_owned_by_agent(running: DockerSandbox) -> None:
     assert running.exec("echo 'Y = 2' >> src/new/deep/mod.py", timeout=10).exit_code == 0
 
 
-@needs_docker
+@pytest.mark.docker
 def test_list_files(running: DockerSandbox) -> None:
     running.write_file("tests/test_code.py", "def test(): pass\n")
 
@@ -232,25 +217,25 @@ def test_list_files(running: DockerSandbox) -> None:
     assert running.list_files("src") == ["src/code.py"]
 
 
-@needs_docker
+@pytest.mark.docker
 def test_read_missing_file_raises(running: DockerSandbox) -> None:
     with pytest.raises(FileNotFoundError):
         running.read_file("src/missing.py")
 
 
-@needs_docker
+@pytest.mark.docker
 def test_list_missing_folder_raises(running: DockerSandbox) -> None:
     with pytest.raises(FileNotFoundError):
         running.list_files("nope")
 
 
-@needs_docker
+@pytest.mark.docker
 def test_read_directory_raises(running: DockerSandbox) -> None:
     with pytest.raises(IsADirectoryError):
         running.read_file("src")
 
 
-@needs_docker
+@pytest.mark.docker
 def test_read_refuses_symlink_out_of_workspace(running: DockerSandbox) -> None:
     running.exec("ln -s /etc/passwd src/link", timeout=10)
 
@@ -258,7 +243,7 @@ def test_read_refuses_symlink_out_of_workspace(running: DockerSandbox) -> None:
         running.read_file("src/link")
 
 
-@needs_docker
+@pytest.mark.docker
 def test_read_refuses_symlink_inside_workspace(running: DockerSandbox) -> None:
     # Even a link to a harmless file is refused: reads never follow links.
     running.exec("ln -s code.py src/alias.py", timeout=10)
@@ -296,7 +281,7 @@ def test_read_and_write_reject_workspace_root() -> None:
         DockerSandbox().write_file(".", "x")
 
 
-@needs_docker
+@pytest.mark.docker
 def test_unsafe_write_leaves_container_unchanged(running: DockerSandbox) -> None:
     before = running.list_files()
 
@@ -317,7 +302,7 @@ def small_limit(task_dir: Path):
         yield sandbox
 
 
-@needs_docker
+@pytest.mark.docker
 def test_write_over_limit_is_refused_and_writes_nothing(small_limit: DockerSandbox) -> None:
     with pytest.raises(FileTooLargeError, match="limit is 100 bytes"):
         small_limit.write_file("src/big.py", "x" * 101)
@@ -325,14 +310,14 @@ def test_write_over_limit_is_refused_and_writes_nothing(small_limit: DockerSandb
     assert "src/big.py" not in small_limit.list_files()
 
 
-@needs_docker
+@pytest.mark.docker
 def test_write_at_limit_is_allowed(small_limit: DockerSandbox) -> None:
     small_limit.write_file("src/exact.py", "x" * 100)
 
     assert small_limit.read_file("src/exact.py") == "x" * 100
 
 
-@needs_docker
+@pytest.mark.docker
 def test_read_over_limit_is_refused(small_limit: DockerSandbox) -> None:
     # Created by a command inside the container, bypassing write_file's own limit.
     small_limit.exec("head -c 5000 /dev/zero > src/big.bin", timeout=10)

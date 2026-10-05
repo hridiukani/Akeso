@@ -1,38 +1,23 @@
 """Contract tests: every Environment implementation must pass the same tests.
 
-Each test runs once with LocalWorkspace and once with DockerSandbox (skipped when
-Docker isn't running or the image isn't built), proving the two behave the same.
+Each test runs once with LocalWorkspace and once with DockerSandbox, proving the two
+behave the same. The Docker runs carry the "docker" marker, so they skip when Docker
+isn't available and are left out of quick runs (pytest -m "not docker").
 """
 
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-import docker
 import pytest
 
 from repair_agent.environment import Environment, FileTooLargeError
 from repair_agent.paths import UnsafePathError
-from repair_agent.sandbox import IMAGE, DockerSandbox
+from repair_agent.sandbox import DockerSandbox
 from repair_agent.workspace import LocalWorkspace
-
-
-def _docker_ready() -> bool:
-    try:
-        client = docker.from_env()
-        client.ping()
-        client.images.get(IMAGE)
-        return True
-    except Exception:
-        return False
-
 
 IMPLEMENTATIONS = [
     pytest.param("local", id="local"),
-    pytest.param(
-        "docker",
-        id="docker",
-        marks=pytest.mark.skipif(not _docker_ready(), reason=f"Docker not running or {IMAGE} not built"),
-    ),
+    pytest.param("docker", id="docker", marks=pytest.mark.docker),
 ]
 
 EnvFactory = Callable[..., Environment]
