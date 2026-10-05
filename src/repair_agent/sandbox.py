@@ -16,6 +16,7 @@ import docker
 from docker.errors import DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 
+from repair_agent.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
 from repair_agent.environment import EnvError, ExecResult, FileTooLargeError
 from repair_agent.paths import UnsafePathError, safe_relative_path
 
@@ -179,6 +180,10 @@ class DockerSandbox:
             raise SandboxError(f"Listing {rel} failed: {result.output.strip()}")
         files = (line.removeprefix("./") for line in result.output.splitlines() if line)
         return sorted(files)
+
+    def run_checks(self, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
+        """Run the task's tests inside the container."""
+        return run_checks(self, timeout)
 
     def _require_started(self) -> Container:
         if self.container is None:

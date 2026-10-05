@@ -3,7 +3,7 @@
 No network calls: a FakeProvider returns canned replies instead of asking a real model.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,7 @@ from repair_agent import oneshot
 from repair_agent.config import Settings
 from repair_agent.llm.types import Message, ModelResponse, ToolDefinition, Usage
 from repair_agent.oneshot import ReplyError, parse_reply, resolve_src_path, run_oneshot
+from repair_agent.workspace import LocalWorkspace
 
 FIXED_CODE = "def mean(numbers):\n    return sum(numbers) / len(numbers)\n"
 
@@ -68,17 +69,19 @@ def test_reply_with_two_blocks_is_rejected() -> None:
 
 
 @pytest.fixture
-def workspace(tmp_path: Path) -> Path:
+def workspace(tmp_path: Path) -> Iterator[LocalWorkspace]:
     (tmp_path / "src").mkdir()
     (tmp_path / "tests").mkdir()
     (tmp_path / "src" / "stats.py").write_text("x = 1\n")
     (tmp_path / "tests" / "test_stats.py").write_text("def test(): pass\n")
-    return tmp_path
+    with LocalWorkspace() as env:
+        env.start(tmp_path)
+        yield env
 
 
 @pytest.mark.parametrize("path", ["src/stats.py", "src\\stats.py", "src/./stats.py"])
-def test_valid_src_path_resolves(workspace: Path, path: str) -> None:
-    assert resolve_src_path(workspace, path) == (workspace / "src" / "stats.py").resolve()
+def test_valid_src_path_resolves(workspace: LocalWorkspace, path: str) -> None:
+    assert resolve_src_path(workspace, path) == "src/stats.py"
 
 
 @pytest.mark.parametrize(
@@ -94,12 +97,12 @@ def test_valid_src_path_resolves(workspace: Path, path: str) -> None:
         "",
     ],
 )
-def test_path_outside_src_is_rejected(workspace: Path, path: str) -> None:
+def test_path_outside_src_is_rejected(workspace: LocalWorkspace, path: str) -> None:
     with pytest.raises(ReplyError, match="not inside src/"):
         resolve_src_path(workspace, path)
 
 
-def test_nonexistent_src_file_is_rejected(workspace: Path) -> None:
+def test_nonexistent_src_file_is_rejected(workspace: LocalWorkspace) -> None:
     with pytest.raises(ReplyError, match="not an existing file"):
         resolve_src_path(workspace, "src/new_module.py")
 
@@ -163,63 +166,67 @@ def read_all(folder: Path) -> dict[str, str]:
     }
 
 
-@pytest.fixture
-def spy(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Record what run_oneshot did inside its workspace.
+class SpyWorkspace(LocalWorkspace):
+    """A LocalWorkspace that records what run_oneshot did inside it.
 
-    The workspace is deleted before run_oneshot returns, so we wrap cleanup_workspace to
-    snapshot the files just before deletion, and wrap run_checks to count check runs.
+    The workspace is deleted before run_oneshot returns, so stop() snapshots the files
+    just before deletion, and run_checks() counts how often the tests ran.
     """
-    record: dict[str, Any] = {"check_runs": 0}
-    real_cleanup = oneshot.cleanup_workspace
-    real_run_checks = oneshot.run_checks
 
-    def cleanup_spy(workspace: Path) -> None:
-        record["workspace"] = workspace
-        record["files"] = read_all(workspace)
-        real_cleanup(workspace)
+    def __init__(self) -> None:
+        super().__init__()
+        self.check_runs = 0
+        self.files: dict[str, str] = {}
+        self.last_root: Path | None = None
 
-    def run_checks_spy(workdir: Path, *args: Any, **kwargs: Any) -> Any:
-        record["check_runs"] += 1
-        return real_run_checks(workdir, *args, **kwargs)
+    def run_checks(self, timeout: float = 60) -> Any:
+        self.check_runs += 1
+        return super().run_checks(timeout)
 
-    monkeypatch.setattr(oneshot, "cleanup_workspace", cleanup_spy)
-    monkeypatch.setattr(oneshot, "run_checks", run_checks_spy)
-    return record
+    def stop(self) -> None:
+        if self.root is not None:
+            self.last_root = self.root
+            self.files = read_all(self.root)
+        super().stop()
 
 
-def test_valid_fix_passes(task: Path, spy: dict[str, Any]) -> None:
+@pytest.fixture
+def spy() -> SpyWorkspace:
+    return SpyWorkspace()
+
+
+def test_valid_fix_passes(task: Path, spy: SpyWorkspace) -> None:
     original = read_all(task)
     provider = FakeProvider(reply("src/stats.py", FIXED_CODE))
 
-    result = run_oneshot(task, confirm=False, settings=SETTINGS, provider=provider)
+    result = run_oneshot(task, confirm=False, settings=SETTINGS, provider=provider, environment=spy)
 
     assert result.passed, result.reason
     assert result.file_path == "src/stats.py"
     assert result.usage == FAKE_USAGE
     assert result.cost_usd == pytest.approx(0.004)
     assert provider.calls == 1
-    assert spy["check_runs"] == 2  # once before the fix, once after
-    assert spy["files"]["src/stats.py"] == FIXED_CODE  # the fix was written to the workspace
+    assert spy.check_runs == 2  # once before the fix, once after
+    assert spy.files["src/stats.py"] == FIXED_CODE  # the fix was written to the workspace
     assert read_all(task) == original  # ...but never to the original task
 
 
-def test_wrong_fix_still_fails(task: Path, spy: dict[str, Any]) -> None:
+def test_wrong_fix_still_fails(task: Path, spy: SpyWorkspace) -> None:
     provider = FakeProvider(reply("src/stats.py", "def mean(numbers):\n    return 0\n"))
 
-    result = run_oneshot(task, confirm=False, settings=SETTINGS, provider=provider)
+    result = run_oneshot(task, confirm=False, settings=SETTINGS, provider=provider, environment=spy)
 
     assert not result.passed
     assert result.reason.startswith("Checks still fail")
 
 
-def assert_failed_cleanly(result: oneshot.OneshotResult, task: Path, spy: dict[str, Any]) -> None:
+def assert_failed_cleanly(result: oneshot.OneshotResult, task: Path, spy: SpyWorkspace) -> None:
     """The run failed with a reason, still reported its cost, and changed no files."""
     assert not result.passed
     assert result.usage == FAKE_USAGE  # the call was paid for even though it was unusable
     assert result.cost_usd == pytest.approx(0.004)
-    assert spy["check_runs"] == 1  # never got as far as rerunning the checks
-    assert spy["files"] == read_all(task)  # workspace identical to the original: nothing written
+    assert spy.check_runs == 1  # never got as far as rerunning the checks
+    assert spy.files == read_all(task)  # workspace identical to the original: nothing written
 
 
 @pytest.mark.parametrize(
@@ -231,9 +238,9 @@ def assert_failed_cleanly(result: oneshot.OneshotResult, task: Path, spy: dict[s
     ],
 )
 def test_malformed_reply_fails_cleanly(
-    task: Path, spy: dict[str, Any], reply_text: str
+    task: Path, spy: SpyWorkspace, reply_text: str
 ) -> None:
-    result = run_oneshot(task, confirm=False, settings=SETTINGS, provider=FakeProvider(reply_text))
+    result = run_oneshot(task, confirm=False, settings=SETTINGS, provider=FakeProvider(reply_text), environment=spy)
 
     assert result.reason.startswith("Unusable reply")
     assert result.file_path is None
@@ -250,26 +257,28 @@ def test_malformed_reply_fails_cleanly(
         "src/../../outside.py",  # starts in src/ but climbs out
     ],
 )
-def test_unsafe_path_fails_cleanly(task: Path, spy: dict[str, Any], path: str) -> None:
+def test_unsafe_path_fails_cleanly(task: Path, spy: SpyWorkspace, path: str) -> None:
     result = run_oneshot(
-        task, confirm=False, settings=SETTINGS, provider=FakeProvider(reply(path, FIXED_CODE))
+        task, confirm=False, settings=SETTINGS, provider=FakeProvider(reply(path, FIXED_CODE)),
+        environment=spy,
     )
 
     assert result.reason.startswith("Unusable reply")
     assert "src/" in result.reason
     assert_failed_cleanly(result, task, spy)
     # Nothing landed next to the workspace or the task either.
-    assert not (spy["workspace"].parent / "outside.py").exists()
+    assert not (spy.last_root.parent / "outside.py").exists()
     assert not (task.parent / "outside.py").exists()
 
 
 def test_rejected_confirmation_writes_nothing(
-    task: Path, spy: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    task: Path, spy: SpyWorkspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("builtins.input", lambda prompt: "n")  # simulate the user typing "n"
 
     result = run_oneshot(
-        task, confirm=True, settings=SETTINGS, provider=FakeProvider(reply("src/stats.py", FIXED_CODE))
+        task, confirm=True, settings=SETTINGS, provider=FakeProvider(reply("src/stats.py", FIXED_CODE)),
+        environment=spy,
     )
 
     assert result.reason.startswith("Change rejected by user")

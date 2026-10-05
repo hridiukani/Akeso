@@ -7,13 +7,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from repair_agent.checks import run_checks, trim_output
+from repair_agent.checks import trim_output
 from repair_agent.config import Settings, load_settings
+from repair_agent.environment import Environment
 from repair_agent.llm.cost import cost_usd
 from repair_agent.llm.provider import Provider, get_provider
 from repair_agent.llm.types import Message, Usage
 from repair_agent.paths import UnsafePathError, safe_relative_path
-from repair_agent.workspace import cleanup_workspace, create_workspace
+from repair_agent.workspace import LocalWorkspace
 
 # Unusual markers rather than ``` fences, because file contents can contain fences.
 FILE_START = "<<<FILE: "
@@ -63,57 +64,57 @@ def run_oneshot(
     confirm: bool = True,
     settings: Settings | None = None,
     provider: Provider | None = None,
+    environment: Environment | None = None,
 ) -> OneshotResult:
     """Run one repair attempt on a copy of task_dir. The original is never modified.
 
     confirm: show a diff of the proposed change and ask before writing it and running
-    the checks. On by default because, until the Docker sandbox exists, checks run
-    model-edited code directly on this machine.
-    settings/provider: injectable for tests; loaded from config when omitted.
+    the checks.
+    settings/provider/environment: injectable for tests. environment must be unstarted;
+    run_oneshot starts it and always stops it.
     """
     settings = settings or load_settings()
     provider = provider or get_provider(settings)
+    env = environment or LocalWorkspace()
     no_usage = Usage(input_tokens=0, output_tokens=0)
 
-    workspace = create_workspace(task_dir)
-    try:
-        before = run_checks(workspace)
+    with env:
+        env.start(task_dir)
+        before = env.run_checks()
         if before.passed:
             # Nothing to repair, so don't spend money asking the model.
             return OneshotResult(False, "Checks already pass before any change; task is invalid.", no_usage, 0.0)
 
         response = provider.complete(
             system=SYSTEM_PROMPT,
-            messages=[Message(role="user", content=build_prompt(workspace, before.output))],
+            messages=[Message(role="user", content=build_prompt(env, before.output))],
         )
         usage = response.usage
         cost = cost_usd(settings.model, usage)
 
         try:
             rel_path, new_content = parse_reply(response.text)
-            target = resolve_src_path(workspace, rel_path)
+            rel_path = resolve_src_path(env, rel_path)
         except ReplyError as error:
             return OneshotResult(False, f"Unusable reply: {error}", usage, cost)
 
-        if confirm and not _approve(rel_path, target.read_text(encoding="utf-8"), new_content):
+        if confirm and not _approve(rel_path, env.read_file(rel_path), new_content):
             return OneshotResult(False, "Change rejected by user; checks not run.", usage, cost, rel_path)
 
-        target.write_text(new_content, encoding="utf-8")
-        after = run_checks(workspace)
+        env.write_file(rel_path, new_content)
+        after = env.run_checks()
         summary = _last_line(after.output)
         reason = f"Checks pass: {summary}" if after.passed else f"Checks still fail: {summary}"
         return OneshotResult(after.passed, reason, usage, cost, rel_path)
-    finally:
-        cleanup_workspace(workspace)
 
 
-def build_prompt(workspace: Path, failure_output: str) -> str:
+def build_prompt(env: Environment, failure_output: str) -> str:
     """Source files, test files and the trimmed failing output, as one user message."""
     sections = []
     for folder in ("src", "tests"):
-        for path in sorted((workspace / folder).rglob("*.py")):
-            rel = path.relative_to(workspace).as_posix()
-            sections.append(f"{INPUT_FILE_HEADER}{rel}\n{path.read_text(encoding='utf-8')}")
+        for rel in env.list_files(folder):
+            if rel.endswith(".py"):
+                sections.append(f"{INPUT_FILE_HEADER}{rel}\n{env.read_file(rel)}")
     sections.append(f"{INPUT_OUTPUT_HEADER}\n{trim_output(failure_output)}")
     return "\n\n".join(sections)
 
@@ -130,21 +131,22 @@ def parse_reply(text: str) -> tuple[str, str]:
     return path, content if content.endswith("\n") else content + "\n"
 
 
-def resolve_src_path(workspace: Path, rel_path: str) -> Path:
-    """Return the workspace file for rel_path, refusing anything that isn't an existing file under src/."""
+def resolve_src_path(env: Environment, rel_path: str) -> str:
+    """Return the normalised path if it names an existing file under src/, else raise ReplyError.
+
+    The environment's own checks (paths stay inside the task, links aren't followed)
+    still apply when the file is later read or written.
+    """
     try:
         parts = safe_relative_path(rel_path)
     except UnsafePathError:
         raise ReplyError(f"path {rel_path!r} is not inside src/.") from None
     if parts.parts[:1] != ("src",):
         raise ReplyError(f"path {rel_path!r} is not inside src/.")
-    target = (workspace / parts).resolve()
-    # Second line of defence: after resolving, the file must still sit inside workspace/src.
-    if not target.is_relative_to((workspace / "src").resolve()):
-        raise ReplyError(f"path {rel_path!r} resolves outside src/.")
-    if not target.is_file():
+    normalised = parts.as_posix()
+    if normalised not in env.list_files("src"):
         raise ReplyError(f"path {rel_path!r} is not an existing file.")
-    return target
+    return normalised
 
 
 def _strip_code_fence(content: str) -> str:

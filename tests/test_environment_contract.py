@@ -167,3 +167,30 @@ def test_exec_hides_host_environment(make_env: EnvFactory, monkeypatch: pytest.M
     result = env.exec(["python", "-c", "import os; print(os.environ.get('REPAIR_AGENT_PROBE'))"], timeout=30)
 
     assert result.output.strip() == "None"
+
+
+# --- run_checks ---
+
+
+def test_run_checks_failing_then_passing(env: Environment) -> None:
+    before = env.run_checks()
+    assert not before.passed
+    assert before.exit_code == 1
+    assert "1 failed" in before.output
+
+    env.write_file("src/code.py", "VALUE = 2\n")
+    after = env.run_checks()
+
+    assert after.passed, after.output
+    assert after.exit_code == 0
+    assert "1 passed" in after.output
+
+
+def test_run_checks_timeout(env: Environment) -> None:
+    env.write_file("tests/test_slow.py", "import time\n\ndef test_slow():\n    time.sleep(30)\n")
+
+    result = env.run_checks(timeout=2)
+
+    assert not result.passed
+    assert result.exit_code is None
+    assert result.duration < 15

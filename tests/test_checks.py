@@ -1,10 +1,14 @@
-"""Tests for run_checks: pass/fail detection, timeouts, and environment isolation."""
+"""Tests for run_checks (via LocalWorkspace): pass/fail, timeouts, and env isolation.
+
+The Docker side is covered by tests/test_environment_contract.py.
+"""
 
 from pathlib import Path
 
 import pytest
 
-from repair_agent.checks import run_checks
+from repair_agent.checks import CheckResult, run_checks
+from repair_agent.workspace import LocalWorkspace
 
 PROBE_NAME = "REPAIR_AGENT_TEST_SECRET"
 PROBE_VALUE = "fake-secret-value-123"
@@ -16,10 +20,17 @@ def write_project(folder: Path, test_code: str) -> Path:
     return folder
 
 
+def check(folder: Path, timeout: float = 60) -> CheckResult:
+    """Run checks on a copy of folder in a LocalWorkspace."""
+    with LocalWorkspace() as env:
+        env.start(folder)
+        return run_checks(env, timeout=timeout)
+
+
 def test_passing_project(tmp_path: Path) -> None:
     project = write_project(tmp_path, "def test_ok():\n    assert 1 + 1 == 2\n")
 
-    result = run_checks(project)
+    result = check(project)
 
     assert result.passed
     assert result.exit_code == 0
@@ -30,7 +41,7 @@ def test_passing_project(tmp_path: Path) -> None:
 def test_failing_project(tmp_path: Path) -> None:
     project = write_project(tmp_path, "def test_broken():\n    total = 1 + 1\n    assert total == 3\n")
 
-    result = run_checks(project)
+    result = check(project)
 
     assert not result.passed
     assert result.exit_code == 1  # pytest's code for "some tests failed"
@@ -41,7 +52,7 @@ def test_failing_project(tmp_path: Path) -> None:
 def test_timeout_counts_as_failure(tmp_path: Path) -> None:
     project = write_project(tmp_path, "import time\ndef test_slow():\n    time.sleep(30)\n")
 
-    result = run_checks(project, timeout=1)
+    result = check(project, timeout=1)
 
     assert not result.passed
     assert result.exit_code is None
@@ -63,7 +74,7 @@ def test_parent_env_var_is_not_visible_to_task_code(
         "    assert value is None\n"
     )
 
-    result = run_checks(tmp_path)
+    result = check(tmp_path)
 
     assert result.passed, result.output
     assert "1 passed" in result.output  # the probe test really ran

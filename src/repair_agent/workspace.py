@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -10,7 +11,7 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
-from repair_agent.checks import CHECK_TIMEOUT_SECONDS, CheckResult, minimal_env, run_checks
+from repair_agent.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
 from repair_agent.environment import EnvError, ExecResult, FileTooLargeError
 from repair_agent.paths import UnsafePathError, safe_relative_path
 
@@ -18,6 +19,23 @@ WORKSPACE_PREFIX = "repair-agent-"
 
 # Caches from earlier host runs could make results depend on stale state, so don't copy them.
 _IGNORED = shutil.ignore_patterns("__pycache__", ".pytest_cache", "*.pyc")
+
+# The only parent variables local task code may see. Everything else (API keys, tokens,
+# personal settings) is left out. PATH lets tests find programs; SYSTEMROOT is required
+# for Python to start on Windows; TEMP/TMP let pytest's tmp_path work.
+_PASSTHROUGH_ENV_VARS = ("PATH", "SYSTEMROOT", "TEMP", "TMP")
+
+
+def minimal_env() -> dict[str, str]:
+    """Environment for local task code: an allowlist of parent variables plus fixed settings.
+
+    An allowlist (not a blocklist) means a new secret added to the parent environment
+    is hidden by default.
+    """
+    env = {name: os.environ[name] for name in _PASSTHROUGH_ENV_VARS if name in os.environ}
+    env["PYTHONIOENCODING"] = "utf-8"  # matches how we decode the output
+    env["PYTHONDONTWRITEBYTECODE"] = "1"  # keep __pycache__ out of the workspace
+    return env
 
 
 def create_workspace(task_dir: str | Path) -> Path:
@@ -146,7 +164,7 @@ class LocalWorkspace:
         return ExecResult(completed.returncode, completed.stdout)
 
     def run_checks(self, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
-        return run_checks(self._require_started(), timeout)
+        return run_checks(self, timeout)
 
     def _require_started(self) -> Path:
         if self.root is None:

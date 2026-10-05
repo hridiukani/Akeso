@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
+
+from repair_agent.environment import Environment
 
 CHECK_TIMEOUT_SECONDS = 60
 DEFAULT_OUTPUT_LIMIT = 4000
 
-# The only parent variables task code may see. Everything else (API keys, tokens,
-# personal settings) is left out. PATH lets tests find programs; SYSTEMROOT is required
-# for Python to start on Windows; TEMP/TMP let pytest's tmp_path work.
-_PASSTHROUGH_ENV_VARS = ("PATH", "SYSTEMROOT", "TEMP", "TMP")
+# "python" is the interpreter with pytest installed in every environment: the image's
+# Python in Docker, and this program's own interpreter in LocalWorkspace.
+PYTEST_COMMAND = ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 
 
 @dataclass(frozen=True)
@@ -28,59 +25,21 @@ class CheckResult:
     duration: float  # seconds
 
 
-def run_checks(workdir: str | Path, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
-    """Run pytest in workdir with the current Python interpreter.
+def run_checks(env: Environment, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
+    """Run the task's tests inside env.
 
-    Passes only if pytest exits with code 0. A timeout counts as a failure.
+    Passes only if pytest exits with code 0, so failures, "no tests collected" (5) and
+    timeouts all count as failures. `-p no:cacheprovider` keeps .pytest_cache out of
+    the task folder.
     """
-    command = [
-        sys.executable,  # same interpreter (and installed pytest) as this program
-        "-m", "pytest",
-        "-q",
-        "-p", "no:cacheprovider",  # don't write .pytest_cache into the workspace
-    ]
     start = time.perf_counter()
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=workdir,
-            env=minimal_env(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,  # merge so errors appear next to the output they belong to
-            text=True,
-            encoding="utf-8",
-            errors="replace",  # never crash on odd bytes in test output
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired as error:
-        partial = error.output or ""
-        if isinstance(partial, bytes):  # TimeoutExpired can hold bytes even when text=True
-            partial = partial.decode("utf-8", errors="replace")
-        return CheckResult(
-            passed=False,
-            exit_code=None,
-            output=f"{partial}\n[checks timed out after {timeout:g} seconds]",
-            duration=time.perf_counter() - start,
-        )
-
+    result = env.exec(PYTEST_COMMAND, timeout=timeout)
     return CheckResult(
-        passed=completed.returncode == 0,
-        exit_code=completed.returncode,
-        output=completed.stdout,
+        passed=result.exit_code == 0,
+        exit_code=result.exit_code,
+        output=result.output,
         duration=time.perf_counter() - start,
     )
-
-
-def minimal_env() -> dict[str, str]:
-    """Environment for task code: an allowlist of parent variables plus fixed settings.
-
-    An allowlist (not a blocklist) means a new secret added to the parent environment
-    is hidden by default.
-    """
-    env = {name: os.environ[name] for name in _PASSTHROUGH_ENV_VARS if name in os.environ}
-    env["PYTHONIOENCODING"] = "utf-8"  # matches how we decode the output
-    env["PYTHONDONTWRITEBYTECODE"] = "1"  # keep __pycache__ out of the workspace
-    return env
 
 
 def trim_output(output: str, limit: int = DEFAULT_OUTPUT_LIMIT) -> str:
