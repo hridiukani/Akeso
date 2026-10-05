@@ -1,4 +1,4 @@
-"""Test doubles: an in-memory Environment, so tool and agent tests need no disk, Docker or network."""
+"""Test doubles: an in-memory Environment and a scripted Provider, so tests need no Docker or network."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from types import TracebackType
 
 from repair_agent.checks import CheckResult
 from repair_agent.environment import ExecResult
+from repair_agent.llm.types import Message, ModelResponse, ToolCall, ToolDefinition, Usage
 from repair_agent.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
 # Decides the result of run_checks from the current files: returns (passed, output).
@@ -111,3 +112,37 @@ class FakeEnvironment:
         tb: TracebackType | None,
     ) -> None:
         self.stop()
+
+
+class ScriptedProvider:
+    """Implements the Provider protocol by replaying a fixed list of responses in order.
+
+    Records every conversation it was sent, so tests can check what the model saw.
+    Running out of responses raises, which the agent records as an error.
+    """
+
+    def __init__(self, responses: Sequence[ModelResponse]) -> None:
+        self.responses = list(responses)
+        self.calls: list[list[Message]] = []
+
+    def complete(
+        self,
+        system: str,
+        messages: Sequence[Message],
+        tools: Sequence[ToolDefinition] | None = None,
+    ) -> ModelResponse:
+        self.calls.append(list(messages))
+        if len(self.calls) > len(self.responses):
+            raise RuntimeError("ScriptedProvider ran out of responses")
+        return self.responses[len(self.calls) - 1]
+
+
+def tool_reply(*calls: tuple[str, dict], text: str = "", usage: Usage = Usage(100, 20)) -> ModelResponse:
+    """A model reply that calls the given tools: tool_reply(("read_file", {"path": "a"}))."""
+    tool_calls = [ToolCall(f"call_{index}", name, args) for index, (name, args) in enumerate(calls)]
+    return ModelResponse(text=text, tool_calls=tool_calls, usage=usage, stop_reason="tool_use")
+
+
+def text_reply(text: str, usage: Usage = Usage(100, 20)) -> ModelResponse:
+    """A model reply with no tool calls (the model is done, or giving up)."""
+    return ModelResponse(text=text, usage=usage, stop_reason="end_turn")
