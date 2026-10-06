@@ -1,0 +1,8 @@
+id: c005_calendar
+kind: code
+description: is_leap_year() is missing the divisible-by-400 rule, so 2000 isn't a leap year. The obvious fix (year % 4 == 0) breaks the passing 1900 test; only the full Gregorian rule passes everything.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+tags: [boolean-logic, regression-guard, single-file]
