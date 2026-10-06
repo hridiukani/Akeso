@@ -69,10 +69,16 @@ def test_cheating_changes_never_reach_grading(task_dir: Path, factory, tmp_path:
 
     # The cheat fooled the agent's own check (that's why the loop stopped after step 3)...
     assert result.stop_reason is StopReason.PASSED and result.steps == 3
-    # ...but grading starts from the pristine task, so the cheat isn't there and the bug is.
+    # ...but grading starts from the pristine task, so the cheat isn't there and the bug is,
+    # and every cheat is recorded as tampering.
     assert not result.passed
-    assert result.verdict is not Verdict.PASSED
+    assert result.verdict is Verdict.TAMPERED
     assert not result.visible_passed
+    expected = ["outside_editable: tests/test_extra.py", "outside_editable: tests/test_stats.py", "python_hook: conftest.py"]
+    assert len(result.tampering) == 3
+    for prefix, finding in zip(expected, sorted(result.tampering)):
+        assert finding.startswith(prefix)
+    assert result.detail.startswith("Tampering detected")
 
 
 def test_task_file_and_private_folders_stay_out_of_the_agent_environment(task_dir: Path, factory, tmp_path: Path) -> None:
