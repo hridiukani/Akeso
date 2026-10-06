@@ -68,7 +68,21 @@ def story(events: list[dict[str, Any]], full: bool = False) -> str:
             lines += _indent(event["result"], full, prefix="       | ")
         elif kind == "error":
             lines.append(f"\n!! Error at step {event['step']}: {event['error']}")
-        elif kind == "judge_restore":
+        elif kind == "changes":
+            lines.append(f"\nAgent changed: {', '.join(event['written'] + event['deleted']) or 'nothing'}")
+            if event["ignored"]:
+                lines.append(f"  Not carried into grading (outside the editable paths): {', '.join(event['ignored'])}")
+            for finding in event["tampering"]:
+                lines.append(f"  !! TAMPERING: {finding}")
+        elif kind == "grading":
+            hidden = {True: "hidden tests passed", False: "hidden tests FAILED", None: "no hidden tests"}[event["hidden_passed"]]
+            visible = "visible tests passed" if event["visible_passed"] else "visible tests FAILED"
+            lines.append(f"\nGraded in a fresh environment: {event['verdict'].upper()} ({visible}, {hidden})")
+            if not event["visible_passed"]:
+                lines += _indent(event["visible_output"], full)
+            elif event["hidden_passed"] is False:
+                lines += _indent(event["hidden_output"], full)
+        elif kind == "judge_restore":  # traces from before fresh-environment grading
             changed = event["restored"] or event["deleted"]
             lines.append(
                 f"\nJudge restored: put back {event['restored'] or 'nothing'}, deleted {event['deleted'] or 'nothing'}"
@@ -76,7 +90,8 @@ def story(events: list[dict[str, Any]], full: bool = False) -> str:
             )
         elif kind == "result":
             lines += [
-                f"\nRESULT: {'PASSED' if event['passed'] else 'FAILED'}  (stop reason: {event['stop_reason']})",
+                f"\nRESULT: {'PASSED' if event['passed'] else 'FAILED'}  "
+                f"(verdict: {event.get('verdict', 'n/a')}, stop reason: {event['stop_reason']})",
                 f"  {event['detail']}",
                 f"  {event['steps']} steps, {event['input_tokens']} in / {event['output_tokens']} out tokens, ${event['cost_usd']:.6f}",
             ]

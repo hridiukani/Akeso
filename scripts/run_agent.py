@@ -13,6 +13,7 @@ from pathlib import Path
 
 from akeso.agent import run_agent
 from akeso.config import ConfigError
+from akeso.tasks import TaskError
 from akeso.sandbox import SandboxError
 
 
@@ -30,12 +31,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         result = run_agent(args.task, max_steps=args.max_steps)
-    except (ConfigError, SandboxError) as error:
+    except (ConfigError, SandboxError, TaskError) as error:
         print(error, file=sys.stderr)
         return 1
 
-    print(f"Task:        {args.task.name}")
-    print(f"Passed:      {result.passed}")
+    hidden = {True: "passed", False: "FAILED", None: "none"}[result.hidden_passed]
+    print(f"Task:        {result.task_id}")
+    print(f"Verdict:     {result.verdict.value}  (visible tests {'passed' if result.visible_passed else 'FAILED'}, hidden tests {hidden})")
+    if result.tampering:
+        print(f"Tampering:   {'; '.join(result.tampering)}")
     print(f"Stop reason: {result.stop_reason.value}")
     print(f"Detail:      {result.detail}")
     print(f"Steps:       {result.steps}")

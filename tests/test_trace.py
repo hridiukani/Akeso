@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from fakes import FakeEnvironment, ScriptedProvider, text_reply, tool_reply
+from fakes import FakeFactory, ScriptedProvider, make_task, text_reply, tool_reply
 from akeso.agent import StopReason, run_agent
 from akeso.config import AgentLimits, Settings
 from akeso.prompts import AGENT_PROMPT_VERSION
@@ -40,12 +40,10 @@ def test_run_ids_are_unique_and_sortable() -> None:
 
 @pytest.fixture
 def task_dir(tmp_path: Path) -> Path:
-    task = tmp_path / "c999_demo"
-    (task / "src").mkdir(parents=True)
-    (task / "tests").mkdir()
-    (task / "src" / "stats.py").write_text("def mean(n):\n    return sum(n) / (len(n) - 1)\n")
-    (task / "tests" / "test_stats.py").write_text("def test_mean(): ...\n")
-    return task
+    return make_task(tmp_path / "tasks", {
+        "src/stats.py": "def mean(n):\n    return sum(n) / (len(n) - 1)\n",
+        "tests/test_stats.py": "def test_mean(): ...\n",
+    }, task_id="c999_demo")
 
 
 def fixed_when_edited(files: dict[str, str]) -> tuple[bool, str]:
@@ -60,9 +58,8 @@ def test_agent_run_records_every_event(task_dir: Path, tmp_path: Path) -> None:
         tool_reply(("apply_edit", {"path": "src/stats.py", "old_str": "(len(n) - 1)", "new_str": "len(n)"})),
         tool_reply(("run_checks", {})),
     ])
-    env = FakeEnvironment(checks=fixed_when_edited)
-
-    result = run_agent(task_dir, settings=SETTINGS, provider=provider, environment=env, run_id="run-1", trace_dir=tmp_path / "runs")
+    result = run_agent(task_dir, settings=SETTINGS, provider=provider, environment_factory=FakeFactory(checks=fixed_when_edited),
+                       run_id="run-1", trace_dir=tmp_path / "runs")
 
     path = trace_path(tmp_path / "runs", "run-1", "c999_demo")
     assert result.trace_path == path.as_posix()
@@ -73,7 +70,7 @@ def test_agent_run_records_every_event(task_dir: Path, tmp_path: Path) -> None:
         "model_call", "tool_call",
         "model_call", "tool_call",
         "model_call", "tool_call", "check",
-        "judge_restore", "check", "result",
+        "changes", "grading", "result",
     ]
 
     start = events[0]
@@ -89,8 +86,14 @@ def test_agent_run_records_every_event(task_dir: Path, tmp_path: Path) -> None:
     assert edit["name"] == "apply_edit" and edit["is_error"] is False and "duration" in edit
     assert edit["arguments"]["new_str"] == "len(n)"
 
-    assert [e["phase"] for e in events if e["event"] == "check"] == ["initial", "agent", "final"]
-    assert events[-1]["passed"] is True and events[-1]["stop_reason"] == "passed"
+    assert [e["phase"] for e in events if e["event"] == "check"] == ["initial", "agent"]
+    changes = events[-3]
+    assert changes["written"] == ["src/stats.py"] and changes["ignored"] == [] and changes["tampering"] == []
+    grading = events[-2]
+    assert grading["verdict"] == "passed" and grading["applied"] == ["src/stats.py"]
+    assert grading["visible_passed"] is True and grading["hidden_passed"] is None
+    assert events[-1]["passed"] is True and events[-1]["verdict"] == "passed"
+    assert events[-1]["task_id"] == "c999_demo" and events[-1]["stop_reason"] == "passed"
 
     assert FAKE_KEY not in path.read_text(encoding="utf-8")  # secrets never reach traces
 
@@ -98,12 +101,13 @@ def test_agent_run_records_every_event(task_dir: Path, tmp_path: Path) -> None:
 def test_trace_records_errors_and_early_stops(task_dir: Path, tmp_path: Path) -> None:
     provider = ScriptedProvider([text_reply("I give up.")])
 
-    result = run_agent(task_dir, settings=SETTINGS, provider=provider, environment=FakeEnvironment(), trace_dir=tmp_path)
+    result = run_agent(task_dir, settings=SETTINGS, provider=provider, environment_factory=FakeFactory(), trace_dir=tmp_path)
 
     events = read_trace(Path(result.trace_path))
     assert events[-1]["stop_reason"] == "gave_up"
     assert events[-1]["passed"] is False
-    assert "judge_restore" in [e["event"] for e in events]  # restored even when the model gives up
+    assert "grading" in [e["event"] for e in events]  # graded even when the model gives up
+    assert events[-1]["verdict"] == "failed"
 
 
 def _load_show_trace():
@@ -124,7 +128,7 @@ def test_show_trace_tells_the_story(task_dir: Path, tmp_path: Path) -> None:
     ])
     result = run_agent(
         task_dir, settings=SETTINGS, provider=provider,
-        environment=FakeEnvironment(checks=fixed_when_edited), trace_dir=tmp_path,
+        environment_factory=FakeFactory(checks=fixed_when_edited), trace_dir=tmp_path,
     )
 
     text = _load_show_trace().story(read_trace(Path(result.trace_path)))
@@ -134,8 +138,9 @@ def test_show_trace_tells_the_story(task_dir: Path, tmp_path: Path) -> None:
     assert "Step 1: model used 100 in / 20 out tokens" in text
     assert "Model says: Trying an edit." in text
     assert "-> apply_edit(" in text and "ERROR]" in text  # the failed first edit is visible
-    assert "Judge restored: put back nothing, deleted nothing" in text
-    assert "RESULT: PASSED  (stop reason: passed)" in text
+    assert "Agent changed: src/stats.py" in text
+    assert "Graded in a fresh environment: PASSED (visible tests passed, no hidden tests)" in text
+    assert "RESULT: PASSED  (verdict: passed, stop reason: passed)" in text
 
 
 def test_show_trace_prints_utf8_even_when_piped(tmp_path: Path) -> None:
