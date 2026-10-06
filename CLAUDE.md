@@ -29,19 +29,32 @@ The project is built in topics (e.g. "Python project setup", "Docker sandbox"). 
 ## During a topic
 - Keep explanations brief unless I ask you to explain something.
 - Still suggest improvements at the end of a step without building them.
+- When a suggestion is deferred, add it to BACKLOG.md (the technical to-do list, committed), grouped by when it will be handled.
 
 ## When I say "topic done: <name>"
-1. In chat, go through every commit in the topic in order: the commit message, what changed, and why. Explain clearly enough that I could describe each one in an interview.
-2. Add a LEARNING.md entry for the topic with only the important things: key concepts, important design decisions and why, anything surprising or tricky, and 3 to 5 interview questions with model answers. No commit-by-commit detail there; that lives in git history. Update the Project map and Glossary if needed. Never rewrite or delete earlier entries unless I ask you to fix a mistake.
+1. In chat only: go through every commit in the topic in order: the commit message, what changed, and why. Explain clearly enough that I could describe each one in an interview. This commit-by-commit summary never goes into LEARNING.md.
+2. Update LEARNING.md, following the style rules below:
+   - Rewrite "Where we are" (replace it; don't append).
+   - Update "Following one task through the system" so it describes the system as it works now.
+   - Add one plain-language section for the topic.
+   - Add new terms to "Words to know" and update "Known limitations".
+   - Never rewrite or delete earlier topic sections unless I ask you to fix a mistake. Keep anything under "My notes" exactly as I wrote it.
 3. LEARNING.md is local only (gitignored, never committed), so there is nothing to commit for it.
 
-## LEARNING.md entry format
-### Topic N: <name>
-- Date
-- Key concepts: each important concept explained simply, with an analogy where helpful
-- Design decisions: choice, alternatives, and why
-- Surprising or tricky: gotchas, bugs found, things that weren't obvious
-- Interview questions: 3 to 5 likely questions with model answers
+## LEARNING.md style
+LEARNING.md is for me, preparing to explain Akeso to two audiences: a non-technical person and a technical interviewer.
+- Explain everything in two layers. First the plain version: what it is and why it exists, in everyday language, with an analogy where it helps. Then "the technical version": the same idea in the real terms an engineer would use (for example sandbox, container isolation, tool calling, agent loop, reward hacking), each briefly defined.
+- Both layers must be accurate. The plain version simplifies but must never be wrong.
+- Avoid file names, function names, code and commit details unless truly essential.
+- Use the file's one consistent analogy (the apprentice mechanic, the locked practice workshop, the foreman, the inspector's checklist and the logbook).
+- File structure, in order:
+  1. "Where we are": what stage the project is at, which topics are done, what it can and can't do yet, and what's next. A few short paragraphs, rewritten after every topic.
+  2. "The project in plain words": what we're building, why, and how the pieces fit together.
+  3. "Following one task through the system": the step-by-step story of fixing one bug with the current system.
+  4. One section per topic, each with: what we built and why the project needed it; how it works (the plain version as a story or analogy, then the technical version in a few precise sentences); the tricky part or interesting decision and why we chose it; and interview questions with answers in plain, confident language.
+  5. "Words to know": a short plain-English glossary.
+  6. "Known limitations": what the project doesn't handle yet, explained simply.
+- The technical backlog belongs in BACKLOG.md, not LEARNING.md.
 
 ## Tech choices
 - Python 3.11+, pyproject.toml, a .venv virtual environment
