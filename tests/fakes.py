@@ -43,6 +43,7 @@ class FakeEnvironment:
         self.on_exec = on_exec or (lambda env, cmd: ExecResult(0, ""))
         self.raise_on = raise_on or {}
         self.files: dict[str, str] = {}
+        self.links: dict[str, str] = {}  # link path -> target, to simulate symlinks
         self.started = False
         self.stopped = False
         self.check_runs = 0
@@ -86,6 +87,9 @@ class FakeEnvironment:
         if not found:
             raise FileNotFoundError(f"{rel} does not exist.")
         return found
+
+    def list_links(self) -> list[str]:
+        return sorted(self.links)
 
     def exec(self, cmd: str | Sequence[str], timeout: float) -> ExecResult:
         self._maybe_raise("exec")

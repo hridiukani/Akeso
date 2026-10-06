@@ -135,6 +135,16 @@ def test_delete_file(env: Environment, task_dir: Path) -> None:
     assert (task_dir / "src" / "code.py").exists()  # the original task is untouched
 
 
+def test_list_links(env: Environment) -> None:
+    assert env.list_links() == []
+    made = env.exec(["python", "-c", "import os; os.symlink('code.py', 'src/alias.py')"], timeout=30)
+    if made.exit_code != 0:
+        pytest.skip("this machine doesn't allow creating symlinks (e.g. Windows without developer mode)")
+
+    assert env.list_links() == ["src/alias.py"]
+    assert "src/alias.py" not in env.list_files()  # list_files only reports regular files
+
+
 def test_original_task_unchanged(env: Environment, task_dir: Path) -> None:
     env.write_file("src/code.py", "VALUE = 99\n")
 

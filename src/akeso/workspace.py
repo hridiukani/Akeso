@@ -149,6 +149,10 @@ class LocalWorkspace:
             p.relative_to(root).as_posix() for p in candidates if p.is_file() and not p.is_symlink()
         )
 
+    def list_links(self) -> list[str]:
+        root = self._require_started()
+        return sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_symlink())
+
     def exec(self, cmd: str | Sequence[str], timeout: float) -> ExecResult:
         """Run cmd in the workspace with a minimal environment.
 

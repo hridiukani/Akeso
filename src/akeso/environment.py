@@ -65,6 +65,12 @@ class Environment(Protocol):
         """Every file under path, relative to the task root, sorted."""
         ...
 
+    def list_links(self) -> list[str]:
+        """Every symbolic link anywhere in the task, relative to the task root, sorted.
+
+        list_files skips links; grading uses this to spot them as tampering."""
+        ...
+
     def exec(self, cmd: str | Sequence[str], timeout: float) -> ExecResult:
         """Run a command in the task root; kill it after `timeout` seconds."""
         ...

@@ -202,6 +202,14 @@ class DockerSandbox:
         """Run the task's tests inside the container."""
         return run_checks(self, timeout, command or self.check_command)
 
+    def list_links(self) -> list[str]:
+        """Every symbolic link under /workspace, relative to it."""
+        self._require_started()
+        result = self.exec(["find", ".", "-type", "l"], timeout=30)
+        if result.exit_code != 0:
+            raise SandboxError(f"Listing links failed: {result.output.strip()}")
+        return sorted(line.removeprefix("./") for line in result.output.splitlines() if line)
+
     def _require_started(self) -> Container:
         if self.container is None:
             raise SandboxError("Sandbox not started; call start() first.")
