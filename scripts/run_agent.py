@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Tokens:      {result.input_tokens} in / {result.output_tokens} out")
     print(f"Cost:        ${result.cost_usd:.6f}")
     print(f"Run on:      {result.provider} / {result.model} / {result.environment} / prompt {result.prompt_version}")
-    print(f"Trace:       {result.trace_path}  (view: python scripts/show_trace.py {result.trace_path})")
+    print(f"Trace:       {result.trace_path}  (view: akeso trace {result.run_id} {result.task_id})")
     return 0 if result.passed else 2
 
 

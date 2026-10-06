@@ -10,6 +10,7 @@ from akeso.agent import StopReason, run_agent
 from akeso.config import AgentLimits, Settings
 from akeso.prompts import AGENT_PROMPT_VERSION
 from akeso.trace import TraceWriter, new_run_id, read_trace, trace_path
+from akeso.trace_view import story
 
 FAKE_KEY = "gsk-fake-key-that-must-never-be-traced"
 SETTINGS = Settings(provider="groq", groq_model="openai/gpt-oss-120b", anthropic_model=None, groq_api_key=FAKE_KEY)
@@ -110,17 +111,7 @@ def test_trace_records_errors_and_early_stops(task_dir: Path, tmp_path: Path) ->
     assert events[-1]["verdict"] == "failed"
 
 
-def _load_show_trace():
-    import importlib.util
-
-    path = Path(__file__).resolve().parent.parent / "scripts" / "show_trace.py"
-    spec = importlib.util.spec_from_file_location("show_trace", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_show_trace_tells_the_story(task_dir: Path, tmp_path: Path) -> None:
+def test_story_tells_what_happened(task_dir: Path, tmp_path: Path) -> None:
     provider = ScriptedProvider([
         tool_reply(("apply_edit", {"path": "src/stats.py", "old_str": "nope", "new_str": "x"}), text="Trying an edit."),
         tool_reply(("apply_edit", {"path": "src/stats.py", "old_str": "(len(n) - 1)", "new_str": "len(n)"})),
@@ -131,7 +122,7 @@ def test_show_trace_tells_the_story(task_dir: Path, tmp_path: Path) -> None:
         environment_factory=FakeFactory(checks=fixed_when_edited), trace_dir=tmp_path,
     )
 
-    text = _load_show_trace().story(read_trace(Path(result.trace_path)))
+    text = story(read_trace(Path(result.trace_path)))
 
     assert "task c999_demo" in text
     assert "Initial check: FAILED (exit 1)" in text
@@ -143,16 +134,17 @@ def test_show_trace_tells_the_story(task_dir: Path, tmp_path: Path) -> None:
     assert "RESULT: PASSED  (verdict: passed, stop reason: passed)" in text
 
 
-def test_show_trace_prints_utf8_even_when_piped(tmp_path: Path) -> None:
+def test_trace_command_prints_utf8_even_when_piped(tmp_path: Path) -> None:
     import subprocess
     import sys
 
-    path = tmp_path / "t.jsonl"
-    with TraceWriter(path) as trace:
+    with TraceWriter(trace_path(tmp_path, "run-1", "t001")) as trace:
         trace.event("error", step=1, error="assert 6.0 == 4.0 \u00b1 4.0e-06")
-    script = Path(__file__).resolve().parent.parent / "scripts" / "show_trace.py"
 
     # A pipe, with no PYTHONIOENCODING help: Windows would default to a legacy code page.
-    completed = subprocess.run([sys.executable, str(script), str(path)], capture_output=True, check=True)
+    completed = subprocess.run(
+        [sys.executable, "-m", "akeso", "trace", "run-1", "t001", "--runs-dir", str(tmp_path)],
+        capture_output=True, check=True,
+    )
 
     assert "\u00b1".encode("utf-8") in completed.stdout

@@ -1,39 +1,10 @@
-"""Print an agent trace as a readable, step-by-step story.
-
-    python scripts/show_trace.py runs/<run_id>/<task_id>.jsonl
-    python scripts/show_trace.py runs/<run_id>            # every task in the run
-    python scripts/show_trace.py runs/<run_id> --full     # don't shorten long outputs
-"""
+"""Turn an agent trace into a readable, step-by-step story (used by `akeso trace`)."""
 
 from __future__ import annotations
 
-import argparse
-import sys
-from pathlib import Path
 from typing import Any
 
-from akeso.trace import read_trace
-
 PREVIEW_LINES = 8
-
-
-def main(argv: list[str] | None = None) -> int:
-    # Windows consoles and pipes default to a legacy code page, so characters in test
-    # output (like pytest's "±") would print as garbage without this.
-    sys.stdout.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Show an agent trace as a story.")
-    parser.add_argument("path", type=Path, help="a .jsonl trace, or a run folder containing them")
-    parser.add_argument("--full", action="store_true", help="show complete outputs instead of previews")
-    args = parser.parse_args(argv)
-
-    paths = sorted(args.path.glob("*.jsonl")) if args.path.is_dir() else [args.path]
-    if not paths or not all(path.is_file() for path in paths):
-        print(f"No trace found at {args.path}", file=sys.stderr)
-        return 1
-    for path in paths:
-        print(story(read_trace(path), full=args.full))
-        print()
-    return 0
 
 
 def story(events: list[dict[str, Any]], full: bool = False) -> str:
@@ -114,7 +85,3 @@ def _indent(text: str, full: bool, prefix: str = "    ") -> list[str]:
         hidden = len(lines) - PREVIEW_LINES
         lines = lines[:PREVIEW_LINES] + [f"... ({hidden} more lines; use --full)"]
     return [prefix + line for line in lines]
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -16,7 +16,13 @@ dependencies = [
     "jsonschema",
     "pydantic>=2",
     "pyyaml",
+    "typer",
+    "rich",
 ]
+
+[project.scripts]
+# The command-line tool: `akeso run --suite smoke`, `akeso validate`, ...
+akeso = "akeso.cli:app"
 
 [tool.pytest.ini_options]
 # Only the harness's own tests. Task folders contain deliberately failing tests.
