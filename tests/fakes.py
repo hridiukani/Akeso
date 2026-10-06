@@ -34,8 +34,12 @@ class FakeEnvironment:
         checks: ChecksRule = always_failing,
         on_exec: Callable[[FakeEnvironment, str | Sequence[str]], ExecResult] | None = None,
         raise_on: dict[str, Exception] | None = None,
+        hidden_checks: ChecksRule | None = None,
     ) -> None:
         self.checks = checks
+        self.hidden_checks = hidden_checks or checks
+        self.check_command = ["python", "-m", "pytest"]
+        self.commands_run: list[list[str]] = []  # every check command, to see what grading ran
         self.on_exec = on_exec or (lambda env, cmd: ExecResult(0, ""))
         self.raise_on = raise_on or {}
         self.files: dict[str, str] = {}
@@ -87,10 +91,14 @@ class FakeEnvironment:
         self._maybe_raise("exec")
         return self.on_exec(self, cmd)
 
-    def run_checks(self, timeout: float = 60) -> CheckResult:
+    def run_checks(self, timeout: float = 60, command: Sequence[str] | None = None) -> CheckResult:
         self._maybe_raise("run_checks")
         self.check_runs += 1
-        passed, output = self.checks(dict(self.files))
+        command = list(command or self.check_command)
+        self.commands_run.append(command)
+        # A command other than the normal one is the hidden-test run during grading.
+        rule = self.checks if command == self.check_command else self.hidden_checks
+        passed, output = rule(dict(self.files))
         return CheckResult(passed, 0 if passed else 1, output, 0.01)
 
     def _file(self, path: str) -> str:

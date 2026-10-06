@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from akeso.environment import Environment
@@ -26,15 +27,17 @@ class CheckResult:
     duration: float  # seconds
 
 
-def run_checks(env: Environment, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
-    """Run the task's tests inside env.
+def run_checks(
+    env: Environment, timeout: float = CHECK_TIMEOUT_SECONDS, command: Sequence[str] = PYTEST_COMMAND
+) -> CheckResult:
+    """Run the task's tests inside env (with `command`, normally the task's check command).
 
     Passes only if pytest exits with code 0, so failures, "no tests collected" (5) and
     timeouts all count as failures. `-p no:cacheprovider` keeps .pytest_cache out of
     the task folder.
     """
     start = time.perf_counter()
-    result = env.exec(PYTEST_COMMAND, timeout=timeout)
+    result = env.exec(list(command), timeout=timeout)
     return CheckResult(
         passed=result.exit_code == 0,
         exit_code=result.exit_code,

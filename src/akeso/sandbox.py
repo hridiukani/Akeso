@@ -18,7 +18,7 @@ import docker
 from docker.errors import DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 
-from akeso.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
+from akeso.checks import CHECK_TIMEOUT_SECONDS, PYTEST_COMMAND, CheckResult, run_checks
 from akeso.environment import EnvError, ExecResult, FileTooLargeError
 from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
@@ -67,6 +67,7 @@ class DockerSandbox:
         # Caps read_file/write_file so a model can't write huge files or pull them into
         # its context (which costs tokens and money).
         self.max_file_bytes = max_file_bytes
+        self.check_command = list(PYTEST_COMMAND)
         self.container: Container | None = None
 
     def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
@@ -197,9 +198,9 @@ class DockerSandbox:
         files = (line.removeprefix("./") for line in result.output.splitlines() if line)
         return sorted(files)
 
-    def run_checks(self, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
+    def run_checks(self, timeout: float = CHECK_TIMEOUT_SECONDS, command: Sequence[str] | None = None) -> CheckResult:
         """Run the task's tests inside the container."""
-        return run_checks(self, timeout)
+        return run_checks(self, timeout, command or self.check_command)
 
     def _require_started(self) -> Container:
         if self.container is None:

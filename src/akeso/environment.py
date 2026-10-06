@@ -41,6 +41,7 @@ class Environment(Protocol):
     """
 
     kind: str  # short name recorded in results, e.g. "docker" or "local"
+    check_command: list[str]  # how run_checks runs the tests; set from the task's check_command
 
     def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
         """Copy the task into the environment, leaving out private_dirs (hidden tests,
@@ -68,8 +69,8 @@ class Environment(Protocol):
         """Run a command in the task root; kill it after `timeout` seconds."""
         ...
 
-    def run_checks(self, timeout: float = ...) -> CheckResult:
-        """Run the task's tests (the judge) and report the result."""
+    def run_checks(self, timeout: float = ..., command: Sequence[str] | None = None) -> CheckResult:
+        """Run the task's tests (check_command unless another command is given)."""
         ...
 
     def __enter__(self) -> Environment: ...

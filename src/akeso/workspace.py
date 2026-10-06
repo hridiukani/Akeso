@@ -11,7 +11,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
-from akeso.checks import CHECK_TIMEOUT_SECONDS, CheckResult, run_checks
+from akeso.checks import CHECK_TIMEOUT_SECONDS, PYTEST_COMMAND, CheckResult, run_checks
 from akeso.environment import EnvError, ExecResult, FileTooLargeError
 from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
@@ -89,6 +89,7 @@ class LocalWorkspace:
 
     def __init__(self, max_file_bytes: int = 1_000_000) -> None:
         self.max_file_bytes = max_file_bytes
+        self.check_command = list(PYTEST_COMMAND)
         self.root: Path | None = None
 
     def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
@@ -182,8 +183,8 @@ class LocalWorkspace:
             return ExecResult(None, f"{partial}\n[command timed out after {timeout:g} seconds]")
         return ExecResult(completed.returncode, completed.stdout)
 
-    def run_checks(self, timeout: float = CHECK_TIMEOUT_SECONDS) -> CheckResult:
-        return run_checks(self, timeout)
+    def run_checks(self, timeout: float = CHECK_TIMEOUT_SECONDS, command: Sequence[str] | None = None) -> CheckResult:
+        return run_checks(self, timeout, command or self.check_command)
 
     def _require_started(self) -> Path:
         if self.root is None:
