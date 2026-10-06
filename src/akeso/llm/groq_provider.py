@@ -36,6 +36,10 @@ class RateLimitExhausted(Exception):
     """Raised when the provider keeps returning HTTP 429 after all retry attempts."""
 
 
+class ToolCallRejected(Exception):
+    """Raised when Groq keeps rejecting the model's generated tool calls as invalid."""
+
+
 class GroqProvider:
     """Implements the Provider protocol for Groq."""
 
@@ -47,9 +51,11 @@ class GroqProvider:
         base_delay: float = 1.0,
         max_delay: float = 30.0,
         sleep: Callable[[float], None] = time.sleep,
+        max_tool_call_attempts: int = 3,
     ) -> None:
         self.model = model
         self.max_attempts = max_attempts
+        self.max_tool_call_attempts = max_tool_call_attempts
         self.base_delay = base_delay
         self.max_delay = max_delay
         self._sleep = sleep  # injectable so tests don't actually wait
@@ -74,23 +80,43 @@ class GroqProvider:
         return _from_openai_response(response)
 
     def _create_with_retry(self, request: dict[str, Any]) -> Any:
-        """Call the API, waiting with exponential backoff on HTTP 429."""
-        for attempt in range(1, self.max_attempts + 1):
+        """Call the API, retrying in two situations:
+
+        - HTTP 429 (rate limited): wait with exponential backoff, then try again.
+        - HTTP 400 "tool_use_failed": Groq checks the model's tool calls against our schemas
+          and rejects the whole reply if one is malformed. That's a bad draw from the model,
+          not a bad request, so asking again usually gets a valid reply.
+        """
+        rate_limited = rejected = 0
+        while True:
             try:
                 return self._client.chat.completions.create(**request)
             except openai.RateLimitError as error:
-                if attempt == self.max_attempts:
+                rate_limited += 1
+                if rate_limited >= self.max_attempts:
                     raise RateLimitExhausted(
                         f"Groq rate limit (HTTP 429) persisted after {self.max_attempts} attempts. "
                         "Wait a minute and try again, or reduce how often requests are sent."
                     ) from error
-                delay = self._retry_delay(attempt, error)
+                delay = self._retry_delay(rate_limited, error)
                 logger.warning(
                     "Groq rate limited (HTTP 429); retrying in %.1fs (attempt %d/%d)",
-                    delay, attempt, self.max_attempts,
+                    delay, rate_limited, self.max_attempts,
                 )
                 self._sleep(delay)
-        raise AssertionError("unreachable")  # the loop always returns or raises
+            except openai.BadRequestError as error:
+                if _error_code(error) != "tool_use_failed":
+                    raise  # a genuinely bad request: retrying won't help
+                rejected += 1
+                if rejected >= self.max_tool_call_attempts:
+                    raise ToolCallRejected(
+                        f"Groq rejected the model's tool call as invalid {rejected} times in a row "
+                        "(HTTP 400 tool_use_failed)."
+                    ) from error
+                logger.warning(
+                    "Groq rejected an invalid tool call from the model (tool_use_failed); asking again (%d/%d)",
+                    rejected, self.max_tool_call_attempts,
+                )
 
     def _retry_delay(self, attempt: int, error: openai.RateLimitError) -> float:
         """Use the server's retry-after if given, else exponential backoff with jitter."""
@@ -182,3 +208,15 @@ def _parse_arguments(tool_name: str, raw: str | None) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError(f"Model sent non-object arguments for tool {tool_name!r}.")
     return parsed
+
+
+def _error_code(error: openai.APIStatusError) -> str | None:
+    """The error code from an API error body, e.g. "tool_use_failed".
+
+    The SDK doesn't always expose it as an attribute, and the body may be the error
+    object itself or wrapped as {"error": {...}}.
+    """
+    body = error.body if isinstance(error.body, dict) else {}
+    inner = body.get("error") if isinstance(body.get("error"), dict) else body
+    code = inner.get("code")
+    return code if isinstance(code, str) else None
