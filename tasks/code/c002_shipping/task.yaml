@@ -1,0 +1,8 @@
+id: c002_shipping
+kind: code
+description: shipping_cost() uses > instead of >= for the free-shipping threshold, so exactly $50 is charged.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+tags: [boundary, off-by-one, single-file]

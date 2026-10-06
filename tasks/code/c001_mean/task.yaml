@@ -1,0 +1,8 @@
+id: c001_mean
+kind: code
+description: mean() divides the sum by len(numbers) - 1 instead of len(numbers).
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+tags: [arithmetic, off-by-one, single-file]

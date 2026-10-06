@@ -1,0 +1,8 @@
+id: c003_discount
+kind: code
+description: cart.py passes a fraction (0.10) to apply_discount, which expects a whole percentage (10).
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+tags: [cross-file, units, helper-misuse]
