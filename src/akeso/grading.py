@@ -119,6 +119,17 @@ def collect_changes(env: Environment, task: Task) -> ChangeSet:
     return changes
 
 
+def changes_from_files(task: Task, files: dict[str, str]) -> ChangeSet:
+    """Turn a set of replacement files (e.g. a reference solution) into a ChangeSet,
+    classified by exactly the same rules as an agent's changes."""
+    original = pristine_files(task)
+    changes = ChangeSet()
+    for rel, content in sorted(files.items()):
+        if original.get(rel) != content:
+            _classify(changes, task, rel, "added" if rel not in original else "modified", content)
+    return changes
+
+
 def _classify(changes: ChangeSet, task: Task, rel: str, status: str, content: str | None) -> None:
     """Sort one changed file into written, deleted, or ignored-with-a-finding."""
     name = rel.rsplit("/", 1)[-1]
