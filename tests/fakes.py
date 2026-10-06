@@ -157,3 +157,51 @@ def tool_reply(*calls: tuple[str, dict], text: str = "", usage: Usage = Usage(10
 def text_reply(text: str, usage: Usage = Usage(100, 20)) -> ModelResponse:
     """A model reply with no tool calls (the model is done, or giving up)."""
     return ModelResponse(text=text, usage=usage, stop_reason="end_turn")
+
+
+class FakeFactory:
+    """Environment factory for run_agent/grade that keeps every FakeEnvironment it makes.
+
+    run_agent calls it twice: created[0] is the agent's environment, created[1] the fresh
+    grading environment.
+    """
+
+    def __init__(self, kind: str = "fake", **kwargs) -> None:
+        self.kind = kind
+        self.kwargs = kwargs
+        self.created: list[FakeEnvironment] = []
+
+    def __call__(self) -> FakeEnvironment:
+        env = FakeEnvironment(**self.kwargs)
+        env.kind = self.kind
+        self.created.append(env)
+        return env
+
+    @property
+    def agent_env(self) -> FakeEnvironment:
+        return self.created[0]
+
+    @property
+    def grading_env(self) -> FakeEnvironment:
+        return self.created[-1]
+
+
+TASK_YAML = """\
+id: {task_id}
+kind: code
+description: A test task.
+editable_paths: [src/]
+split: dev
+"""
+
+
+def make_task(root: Path, files: dict[str, str], task_id: str = "t001_demo") -> Path:
+    """Write a task folder (task.yaml plus the given files, with \n line endings) and return it."""
+    task = root / task_id
+    task.mkdir(parents=True, exist_ok=True)
+    (task / "task.yaml").write_text(TASK_YAML.format(task_id=task_id), newline="\n")
+    for rel, content in files.items():
+        path = task / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, newline="\n")
+    return task
