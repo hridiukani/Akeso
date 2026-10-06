@@ -41,10 +41,10 @@ def make_env(request: pytest.FixtureRequest, task_dir: Path) -> Iterator[EnvFact
     """Factory that builds and starts an environment of the parametrised kind."""
     created: list[Environment] = []
 
-    def factory(**kwargs: int) -> Environment:
+    def factory(private_dirs: tuple[str, ...] = (), **kwargs: int) -> Environment:
         env: Environment = LocalWorkspace(**kwargs) if request.param == "local" else DockerSandbox(**kwargs)
         created.append(env)
-        env.start(task_dir)
+        env.start(task_dir, private_dirs)
         return env
 
     yield factory
@@ -100,6 +100,22 @@ def test_secrets_git_and_caches_never_copied(make_env: EnvFactory, task_dir: Pat
     # Belt and braces: nothing anywhere in the copy contains the secret.
     search = env.exec(
         ["python", "-c", "import pathlib; print([str(p) for p in pathlib.Path('.').rglob('*') if p.is_file() and b'sk-ant' in p.read_bytes()])"],
+        timeout=30,
+    )
+    assert search.output.strip() == "[]"
+
+
+def test_hidden_tests_solution_and_task_file_never_copied(make_env: EnvFactory, task_dir: Path) -> None:
+    (task_dir / "task.yaml").write_text("id: demo\n")
+    for folder in ("hidden_tests", "solution", "answers"):
+        (task_dir / folder).mkdir()
+        (task_dir / folder / "test_secret.py").write_text("SECRET = 'reference fix'\n")
+
+    env = make_env(private_dirs=("answers",))  # a task with a custom-named private folder
+
+    assert env.list_files() == ["pytest.ini", "src/code.py", "tests/test_code.py"]
+    search = env.exec(
+        ["python", "-c", "import pathlib; print([str(p) for p in pathlib.Path('.').rglob('*') if p.is_file() and b'reference fix' in p.read_bytes()])"],
         timeout=30,
     )
     assert search.output.strip() == "[]"

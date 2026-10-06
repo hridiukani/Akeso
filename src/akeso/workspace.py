@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
@@ -18,9 +18,16 @@ from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_pa
 WORKSPACE_PREFIX = "akeso-"
 
 
-def _ignore_excluded(directory: str, names: list[str]) -> set[str]:
-    """copytree callback: skip the same files the sandbox skips (secrets, .git, caches)."""
-    return {name for name in names if is_excluded_task_file(name)}
+def _ignore_excluded(source: Path, private_dirs: Sequence[str]) -> Callable[[str, list[str]], set[str]]:
+    """A copytree callback that skips the same files the sandbox skips (secrets, .git,
+    caches, hidden tests, solution). copytree passes basenames per folder, so the path
+    relative to the task root is rebuilt first."""
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        rel_dir = Path(directory).relative_to(source)
+        return {name for name in names if is_excluded_task_file((rel_dir / name).as_posix(), private_dirs)}
+
+    return ignore
 
 
 # The only parent variables local task code may see. Everything else (API keys, tokens,
@@ -41,7 +48,7 @@ def minimal_env() -> dict[str, str]:
     return env
 
 
-def create_workspace(task_dir: str | Path) -> Path:
+def create_workspace(task_dir: str | Path, private_dirs: Sequence[str] = ()) -> Path:
     """Copy task_dir into a new temporary directory and return that directory's path.
 
     The copy is independent: editing files in it never changes task_dir.
@@ -53,7 +60,7 @@ def create_workspace(task_dir: str | Path) -> Path:
     workspace = Path(tempfile.mkdtemp(prefix=WORKSPACE_PREFIX))
     # symlinks=False copies the files a link points to rather than the link itself,
     # so edits in the workspace can never write through a link into the original.
-    shutil.copytree(source, workspace, symlinks=False, ignore=_ignore_excluded, dirs_exist_ok=True)
+    shutil.copytree(source, workspace, symlinks=False, ignore=_ignore_excluded(source, private_dirs), dirs_exist_ok=True)
     return workspace
 
 
@@ -84,10 +91,10 @@ class LocalWorkspace:
         self.max_file_bytes = max_file_bytes
         self.root: Path | None = None
 
-    def start(self, task_dir: str | Path) -> None:
+    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
         if self.root is not None:
             raise EnvError("Workspace already started; call stop() first.")
-        self.root = create_workspace(task_dir)
+        self.root = create_workspace(task_dir, private_dirs)
 
     def stop(self) -> None:
         if self.root is None:

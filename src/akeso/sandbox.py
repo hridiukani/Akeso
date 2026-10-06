@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import tarfile
 import time
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from types import TracebackType
@@ -68,7 +69,7 @@ class DockerSandbox:
         self.max_file_bytes = max_file_bytes
         self.container: Container | None = None
 
-    def start(self, task_dir: str | Path) -> None:
+    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
         """Create the container, copy the task files into /workspace, and start it."""
         if self.container is not None:
             raise SandboxError("Sandbox already started; call stop() first.")
@@ -99,7 +100,7 @@ class DockerSandbox:
             # (the container only has the image's own variables, never the host's).
         )
         try:
-            self.container.put_archive(WORKDIR, _tar_folder(source))
+            self.container.put_archive(WORKDIR, _tar_folder(source, private_dirs))
             self.container.start()
         except Exception:
             self.stop()  # don't leave a half-built container behind
@@ -297,14 +298,14 @@ def _owned_tarinfo(name: str, is_dir: bool) -> tarfile.TarInfo:
     return info
 
 
-def _tar_folder(folder: Path) -> bytes:
+def _tar_folder(folder: Path, private_dirs: Sequence[str] = ()) -> bytes:
     """Pack folder's contents into an in-memory tar owned by the sandbox user.
 
     Ownership matters: put_archive keeps the tar's owner, and files owned by root
     would be read-only for the non-root user that edits them.
     """
     def as_sandbox_user(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
-        if is_excluded_task_file(info.name):
+        if is_excluded_task_file(info.name, private_dirs):
             return None  # never copied: secrets, .git, caches
         info.uid = info.gid = USER_ID
         info.uname = info.gname = USER

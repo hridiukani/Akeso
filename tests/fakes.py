@@ -43,12 +43,12 @@ class FakeEnvironment:
         self.stopped = False
         self.check_runs = 0
 
-    def start(self, task_dir: str | Path) -> None:
+    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
         self._maybe_raise("start")
         root = Path(task_dir)
         for path in root.rglob("*"):
             rel = path.relative_to(root).as_posix()
-            if path.is_file() and not is_excluded_task_file(rel):
+            if path.is_file() and not is_excluded_task_file(rel, private_dirs):
                 # Bytes, not read_text: keep \r\n exactly, like the real environments do.
                 self.files[rel] = path.read_bytes().decode("utf-8")
         self.started = True

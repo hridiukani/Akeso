@@ -70,3 +70,14 @@ def test_safe_paths_are_normalised(path: str, expected: str) -> None:
 def test_unsafe_paths_are_rejected(path: str, reason: str) -> None:
     with pytest.raises(UnsafePathError, match=reason):
         safe_relative_path(path)
+
+
+@pytest.mark.parametrize("path", ["hidden_tests", "hidden_tests/test_x.py", "solution/src/stats.py", "task.yaml"])
+def test_grading_files_are_always_excluded(path: str) -> None:
+    assert is_excluded_task_file(path)
+
+
+def test_task_private_dirs_are_excluded_at_top_level_only() -> None:
+    assert is_excluded_task_file("secret_tests/test_x.py", private_dirs=("secret_tests",))
+    assert not is_excluded_task_file("src/secret_tests/x.py", private_dirs=("secret_tests",))
+    assert not is_excluded_task_file("src/solution.py")  # a file named like a private folder is fine

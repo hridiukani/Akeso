@@ -8,6 +8,7 @@ and DockerSandbox) goes through is_excluded_task_file, so the rules can't drift 
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from pathlib import PurePosixPath
 
 _DRIVE_LETTER = re.compile(r"^[A-Za-z]:$")
@@ -46,15 +47,21 @@ def safe_relative_path(path: str) -> PurePosixPath:
 _EXCLUDED_NAMES = {".git", "__pycache__", ".pytest_cache"}  # folders: everything inside goes too
 _EXCLUDED_PREFIXES = (".env",)  # .env, .env.local, .env.example, ...: may hold secrets
 _EXCLUDED_SUFFIXES = (".pyc",)  # bytecode from earlier runs
+# Top-level entries that are for grading only. They're always excluded, even when a caller
+# forgets to pass the task's own private folders, so the agent can never see them.
+ALWAYS_PRIVATE = ("hidden_tests", "solution", "task.yaml")
 
 
-def is_excluded_task_file(path: str) -> bool:
+def is_excluded_task_file(path: str, private_dirs: Collection[str] = ()) -> bool:
     """True if this file or folder inside a task must never be copied into a run.
 
     Every part of the path is checked, so anything inside an excluded folder (like
-    .git/config) is excluded too.
+    .git/config) is excluded too. private_dirs names extra top-level folders to keep out
+    (a task's hidden tests and solution).
     """
     parts = PurePosixPath(path.replace("\\", "/")).parts
+    if parts and (parts[0] in ALWAYS_PRIVATE or parts[0] in private_dirs):
+        return True
     if any(part in _EXCLUDED_NAMES or part.startswith(_EXCLUDED_PREFIXES) for part in parts):
         return True
     return bool(parts) and parts[-1].endswith(_EXCLUDED_SUFFIXES)

@@ -42,8 +42,10 @@ class Environment(Protocol):
 
     kind: str  # short name recorded in results, e.g. "docker" or "local"
 
-    def start(self, task_dir: str | Path) -> None:
-        """Copy the task into the environment. The original task folder is never modified."""
+    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
+        """Copy the task into the environment, leaving out private_dirs (hidden tests,
+        solution) and everything paths.is_excluded_task_file excludes. The original task
+        folder is never modified."""
         ...
 
     def stop(self) -> None:
