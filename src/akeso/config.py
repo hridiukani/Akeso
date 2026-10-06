@@ -64,6 +64,15 @@ class Settings:
     groq_api_key: str | None = field(default=None, repr=False)
     anthropic_api_key: str | None = field(default=None, repr=False)
     limits: AgentLimits = field(default_factory=AgentLimits)
+    # Minimum seconds between the starts of two model calls, per provider. Groq's free tier
+    # allows about 30 requests a minute, so 2 seconds keeps runs under it.
+    groq_min_call_interval: float = 2.0
+    anthropic_min_call_interval: float = 0.0
+
+    @property
+    def min_call_interval(self) -> float:
+        """The pacing gap for the active provider."""
+        return self.groq_min_call_interval if self.provider == "groq" else self.anthropic_min_call_interval
 
     @property
     def model(self) -> str:
@@ -127,6 +136,8 @@ def load_settings(env_file: str | Path = ".env") -> Settings:
         groq_api_key=get("GROQ_API_KEY"),
         anthropic_api_key=get("ANTHROPIC_API_KEY"),
         limits=limits,
+        groq_min_call_interval=_number(get, "GROQ_MIN_CALL_INTERVAL", float, 2.0, minimum=0.0),
+        anthropic_min_call_interval=_number(get, "ANTHROPIC_MIN_CALL_INTERVAL", float, 0.0, minimum=0.0),
     )
 
 

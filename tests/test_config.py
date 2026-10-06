@@ -9,6 +9,7 @@ from akeso.config import AgentLimits, ConfigError, load_settings
 ENV_VARS = (
     "PROVIDER", "GROQ_API_KEY", "GROQ_MODEL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
     "AGENT_MAX_STEPS", "AGENT_MAX_COST_USD", "AGENT_MAX_TOTAL_TOKENS", "AGENT_REPEATED_FAILURE_LIMIT",
+    "GROQ_MIN_CALL_INTERVAL", "ANTHROPIC_MIN_CALL_INTERVAL",
 )
 FAKE_GROQ_KEY = "gsk-fake-groq-key-123"
 FAKE_ANTHROPIC_KEY = "sk-ant-fake-anthropic-key-456"
@@ -147,3 +148,15 @@ def test_agent_limits_read_from_env_file(tmp_path: Path) -> None:
 def test_invalid_agent_limits_name_the_variable(tmp_path: Path, line: str, message: str) -> None:
     with pytest.raises(ConfigError, match=message):
         load_settings(write_env(tmp_path, GROQ_BASE + line + "\n"))
+
+
+def test_call_intervals_default_and_override(tmp_path: Path) -> None:
+    assert load_settings(write_env(tmp_path, GROQ_BASE)).min_call_interval == 2.0
+
+    settings = load_settings(write_env(tmp_path, GROQ_BASE + "GROQ_MIN_CALL_INTERVAL=0.5\nANTHROPIC_MIN_CALL_INTERVAL=1\n"))
+    assert (settings.groq_min_call_interval, settings.anthropic_min_call_interval) == (0.5, 1.0)
+
+
+def test_negative_call_interval_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="GROQ_MIN_CALL_INTERVAL='-1' must be at least 0.0"):
+        load_settings(write_env(tmp_path, GROQ_BASE + "GROQ_MIN_CALL_INTERVAL=-1\n"))
