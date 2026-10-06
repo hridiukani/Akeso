@@ -159,7 +159,11 @@ def run_agent(
                 return result(StopReason.ERROR, "Checks already pass before any change; task is invalid.")
 
             readme = task.root / "README.md"
-            first = build_first_message(readme.read_text(encoding="utf-8") if readme.is_file() else None, initial.output)
+            first = build_first_message(
+                readme.read_text(encoding="utf-8") if readme.is_file() else None,
+                initial.output,
+                task.spec.editable_paths,
+            )
             messages = [Message.user(first)]
             try:
                 while True:

@@ -6,18 +6,25 @@ results from different prompt versions are different experiments.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from akeso.checks import trim_output
 
-AGENT_PROMPT_VERSION = "agent-v2"  # v2: run_command no longer claims "no network" (wrong locally)
+AGENT_PROMPT_VERSION = "agent-v3"  # v3: names the editable paths; changes elsewhere count as tampering
 
 AGENT_SYSTEM_PROMPT = """\
 You are a careful software engineer fixing a bug in a small Python project.
 The project's tests are failing. Your job is to change the source code so they pass.
 
 Rules:
-- Fix the source code only. Never modify, delete or add tests, files under tests/, or test
-  configuration (pytest.ini, conftest.py, pyproject.toml, setup.cfg, tox.ini). The original
-  tests are restored before the final check, so changing them cannot help.
+- Fix the source code only, and only inside the editable folders named in the first
+  message. Never modify, delete or add tests, test configuration (pytest.ini, conftest.py,
+  pyproject.toml, setup.cfg, tox.ini) or files anywhere else, not even scratch files. Your
+  changes are graded in a fresh copy of the project with the original tests plus extra
+  hidden tests; changes outside the editable folders are recorded as tampering and count
+  as a failure.
+- Fix the real bug for every input the README describes; don't special-case the inputs
+  used by the visible tests.
 - Understand before you edit: read the failing test output, then read the relevant source
   files. A bug can involve more than one file.
 - Make small, targeted edits. Change only what is needed to fix the bug; don't rewrite whole
@@ -35,11 +42,14 @@ When run_checks reports PASSED, reply with one sentence describing the fix and s
 tools. If you can't fix the bug, explain why and stop calling tools."""
 
 
-def build_first_message(readme: str | None, failing_output: str) -> str:
-    """The opening user message: what the project should do, and how it currently fails."""
+def build_first_message(readme: str | None, failing_output: str, editable_paths: Sequence[str]) -> str:
+    """The opening user message: what the project should do, where changes are allowed,
+    and how it currently fails."""
     readme_text = readme.strip() if readme else "(This project has no README.)"
+    folders = ", ".join(f"{path}/" for path in editable_paths)
     return (
         "Fix the bug in this project so that its tests pass.\n\n"
+        f"You may only change files under: {folders}\n\n"
         f"### README.md\n{readme_text}\n\n"
         f"### Current test output (failing)\n{trim_output(failing_output)}"
     )
