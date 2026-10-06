@@ -14,6 +14,8 @@ dependencies = [
     "pytest",
     "docker",
     "jsonschema",
+    "pydantic>=2",
+    "pyyaml",
 ]
 
 [tool.pytest.ini_options]
