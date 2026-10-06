@@ -1,0 +1,8 @@
+id: c004_duration
+kind: code
+description: format_duration() computes minutes as seconds // 60 instead of (seconds % 3600) // 60, so durations of an hour or more show too many minutes.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+tags: [string-formatting, arithmetic, single-file]
