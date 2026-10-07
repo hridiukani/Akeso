@@ -26,6 +26,13 @@ def result(task_id: str, verdict: Verdict, steps: int, tokens: int, stop: StopRe
     )
 
 
+def fixed_suite(name: str) -> list[str]:
+    """A stand-in suite, so these tests don't depend on what the real suites contain."""
+    if name != "smoke":
+        return load_suite(name)  # real lookup, for the unknown-suite error
+    return ["c001_mean", "c002_shipping", "c003_discount"]
+
+
 @pytest.fixture
 def fake_run(monkeypatch: pytest.MonkeyPatch):
     calls = {}
@@ -41,6 +48,7 @@ def fake_run(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
     monkeypatch.setattr(cli, "load_settings", lambda: SETTINGS)
+    monkeypatch.setattr(cli, "load_suite", fixed_suite)
     return calls
 
 
@@ -81,6 +89,7 @@ def test_run_with_an_unknown_suite(fake_run) -> None:
 
 
 def test_validate_prints_the_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_suite", fixed_suite)
     monkeypatch.setattr(cli, "validate_task", lambda task: TaskValidation(task.id, True, True, True))
 
     out = runner.invoke(cli.app, ["validate", "--suite", "smoke"])
