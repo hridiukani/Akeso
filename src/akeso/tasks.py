@@ -7,26 +7,61 @@ A task folder looks like:
     tests/ ...         the visible tests the agent can run
     hidden_tests/ ...  extra tests used only for grading (never shown to the agent)
     solution/ ...      the reference fix, laid out like the task (never shown to the agent)
+
+A SQL task (kind: sql) has a `sql:` block instead, and its only editable file is
+solution.sql (the broken query); solution/solution.sql is the gold query. Its data comes
+from a shared dataset in tasks/datasets/<name>/ (see datasets.py), built from a seed.
 """
 
 from __future__ import annotations
 
 import shlex
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from akeso.datasets import DATASETS_FOLDER, Dataset, DatasetError, load_dataset
 from akeso.paths import UnsafePathError, safe_relative_path
 
 TASK_FILE = "task.yaml"
 DEFAULT_TASKS_ROOT = Path("tasks")
+SQL_SOLUTION_FILE = "solution.sql"  # the one file a SQL task's agent may edit
 
 
 class TaskError(Exception):
     """A task.yaml is missing, unreadable, or invalid. The message names the file and the problem."""
+
+
+class SqlSpec(BaseModel):
+    """The `sql:` block of a SQL task."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1)  # what solution.sql must answer
+    # The date the question is asked on. Fixed, so results never depend on when a run happens.
+    as_of: date
+    dataset: str = Field(pattern=r"^[a-z0-9][a-z0-9_]*$")  # a folder in tasks/datasets/
+    seed: int  # builds the visible database the agent works with
+    hidden_seed: int  # builds the grading-only database; never enters the agent's sandbox
+    order_matters: bool = False  # compare rows in order (only when the question asks for an order)
+    float_precision: int = Field(default=2, ge=0, le=10)  # decimal places floats are rounded to when comparing
+
+    @field_validator("as_of", mode="before")
+    @classmethod
+    def _as_of_is_fixed(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip().lower() in ("today", "now", "current_date"):
+            raise ValueError("must be a fixed date such as 2026-06-30, never today")
+        return value
+
+    @model_validator(mode="after")
+    def _seeds_differ(self) -> SqlSpec:
+        if self.seed == self.hidden_seed:
+            raise ValueError("hidden_seed must differ from seed, or the hidden database can't catch anything")
+        return self
 
 
 class TaskSpec(BaseModel):
@@ -37,7 +72,7 @@ class TaskSpec(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_default=True)
 
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_]*$")
-    kind: Literal["code", "sql"]  # only "code" can run today; "sql" is reserved for later
+    kind: Literal["code", "sql"]
     description: str = Field(min_length=1)
     check_command: str = "python -m pytest -q -p no:cacheprovider"
     editable_paths: list[str] = Field(default_factory=lambda: ["src/"], min_length=1)
@@ -45,6 +80,7 @@ class TaskSpec(BaseModel):
     solution_dir: str = "solution"
     split: Literal["dev", "heldout"]
     tags: list[str] = Field(default_factory=list)
+    sql: SqlSpec | None = None  # required for kind: sql, not allowed for kind: code
 
     @field_validator("check_command")
     @classmethod
@@ -83,6 +119,20 @@ class TaskSpec(BaseModel):
                 raise ValueError(f"editable path {path!r} overlaps tests, hidden tests or the solution")
         return self
 
+    @model_validator(mode="after")
+    def _kind_specific_fields(self) -> TaskSpec:
+        if self.kind == "code":
+            if self.sql is not None:
+                raise ValueError("a 'sql' block is only for kind: sql")
+            return self
+        if self.sql is None:
+            raise ValueError("kind: sql needs a 'sql' block (question, as_of, dataset, seed, hidden_seed)")
+        if self.editable_paths != [SQL_SOLUTION_FILE]:
+            raise ValueError(f"a SQL task's editable_paths must be exactly [{SQL_SOLUTION_FILE}]")
+        if "check_command" in self.model_fields_set:
+            raise ValueError("SQL tasks don't take a check_command: they're checked against the gold query")
+        return self
+
 
 @dataclass(frozen=True)
 class Task:
@@ -103,6 +153,26 @@ class Task:
     @property
     def check_command(self) -> list[str]:
         return shlex.split(self.spec.check_command)
+
+    @property
+    def sql(self) -> SqlSpec:
+        """The `sql:` block (SQL tasks only)."""
+        if self.spec.sql is None:
+            raise TaskError(f"{self.id} is a {self.spec.kind} task, not a SQL task.")
+        return self.spec.sql
+
+    @property
+    def dataset(self) -> Dataset:
+        """The shared dataset a SQL task uses, from tasks/datasets/<name>/."""
+        return load_dataset(self.sql.dataset, self.root.parent.parent / DATASETS_FOLDER)
+
+    def definition_files(self) -> list[Path]:
+        """Every file that defines this task, including a SQL task's shared dataset, so a
+        fingerprint of these changes whenever anything that affects the task changes."""
+        files = [p for p in self.root.rglob("*") if p.is_file() and "__pycache__" not in p.parts]
+        if self.spec.kind == "sql":
+            files += self.dataset.files()
+        return sorted(files)
 
     def is_editable(self, rel_path: str) -> bool:
         """True if rel_path is inside one of the task's editable paths."""
@@ -132,7 +202,13 @@ def load_task(task_dir: str | Path) -> Task:
         raise TaskError(f"{path}: {details}") from None
     if spec.id != root.name:
         raise TaskError(f"{path}: id {spec.id!r} must match the folder name {root.name!r}.")
-    return Task(spec=spec, root=root)
+    task = Task(spec=spec, root=root)
+    if spec.kind == "sql":
+        try:
+            task.dataset
+        except DatasetError as problem:
+            raise TaskError(f"{path}: {problem}") from None
+    return task
 
 
 def find_task(task_id: str, tasks_root: str | Path = DEFAULT_TASKS_ROOT) -> Task:
