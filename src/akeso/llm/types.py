@@ -91,6 +91,7 @@ class ModelResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
     usage: Usage = field(default_factory=lambda: Usage(input_tokens=0, output_tokens=0))
     stop_reason: StopReason = "end_turn"
+    rate_limit_retries: int = 0  # times the provider waited and retried after HTTP 429
 
     def as_message(self) -> Message:
         """This reply as an assistant message, to append to the conversation history."""

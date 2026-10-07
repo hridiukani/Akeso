@@ -93,3 +93,15 @@ def test_rate_limits_and_rejections_are_counted_separately() -> None:
                                 max_attempts=3, max_tool_call_attempts=3)
 
     assert ask(provider).text == "done"
+
+
+def test_response_reports_how_many_rate_limit_retries_it_took() -> None:
+    provider, _ = provider_with([rate_limited(), rate_limited(), OK])
+
+    assert ask(provider).rate_limit_retries == 2
+
+
+def test_no_retries_reported_when_not_rate_limited() -> None:
+    provider, _ = provider_with([tool_use_failed(), OK])  # a rejected tool call isn't a rate limit
+
+    assert ask(provider).rate_limit_retries == 0

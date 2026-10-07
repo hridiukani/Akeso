@@ -93,6 +93,7 @@ def summarize(results: Sequence[AgentResult]) -> dict[str, Any]:
         "total_input_tokens": sum(r.input_tokens for r in results),
         "total_output_tokens": sum(r.output_tokens for r in results),
         "total_cost_usd": sum(r.cost_usd for r in results),
+        "total_rate_limit_retries": sum(r.rate_limit_retries for r in results),
     }
 
 

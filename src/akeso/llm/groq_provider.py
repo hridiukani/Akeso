@@ -7,6 +7,7 @@ import logging
 import random
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import Any
 
 import openai
@@ -76,11 +77,12 @@ class GroqProvider:
         if tools:
             request["tools"] = [_to_openai_tool(t) for t in tools]
 
-        response = self._create_with_retry(request)
-        return _from_openai_response(response)
+        response, rate_limit_retries = self._create_with_retry(request)
+        return replace(_from_openai_response(response), rate_limit_retries=rate_limit_retries)
 
-    def _create_with_retry(self, request: dict[str, Any]) -> Any:
-        """Call the API, retrying in two situations:
+    def _create_with_retry(self, request: dict[str, Any]) -> tuple[Any, int]:
+        """Call the API and return (response, number of rate-limit retries), retrying in
+        two situations:
 
         - HTTP 429 (rate limited): wait with exponential backoff, then try again.
         - HTTP 400 "tool_use_failed": Groq checks the model's tool calls against our schemas
@@ -90,7 +92,7 @@ class GroqProvider:
         rate_limited = rejected = 0
         while True:
             try:
-                return self._client.chat.completions.create(**request)
+                return self._client.chat.completions.create(**request), rate_limited
             except openai.RateLimitError as error:
                 rate_limited += 1
                 if rate_limited >= self.max_attempts:

@@ -57,6 +57,7 @@ def test_summary_file_has_results_and_totals(tasks_root: Path, tmp_path: Path) -
     assert data["totals"] == {
         "tasks": 2, "passed": 1, "failed": 1, "tampered": 0, "pass_rate": 0.5,
         "average_steps": 1.5, "total_input_tokens": 300, "total_output_tokens": 60, "total_cost_usd": 0.0,
+        "total_rate_limit_retries": 0,
     }
     assert data["limits"]["max_steps"] == 20
 
@@ -117,3 +118,13 @@ def test_no_sweep_for_non_docker_environments(tasks_root: Path, tmp_path: Path, 
 
 def test_summarize_empty_run() -> None:
     assert summarize([])["pass_rate"] == 0.0
+
+
+def test_summary_totals_rate_limit_retries(tasks_root: Path, tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    summary = run(tasks_root, tmp_path, [replace(text_reply("no"), rate_limit_retries=4), replace(text_reply("no"), rate_limit_retries=1)])
+
+    data = read_summary(summary.run_dir)
+    assert [r["rate_limit_retries"] for r in data["results"]] == [4, 1]
+    assert data["totals"]["total_rate_limit_retries"] == 5

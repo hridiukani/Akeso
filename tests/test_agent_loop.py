@@ -224,3 +224,12 @@ def test_agent_sends_run_command_description_for_its_environment(task_dir: Path,
 
     run_command = next(d for d in provider.tools[0] if d.name == "run_command")
     assert expected in run_command.description
+
+
+def test_rate_limit_retries_are_totalled_per_task(task_dir: Path, tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    responses = [replace(tool_reply(FIX), rate_limit_retries=2), replace(tool_reply(CHECKS), rate_limit_retries=1)]
+    result, _, _ = run(task_dir, tmp_path, responses)
+
+    assert result.rate_limit_retries == 3

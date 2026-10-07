@@ -64,6 +64,7 @@ class AgentResult:
     visible_passed: bool = False
     hidden_passed: bool | None = None  # None when the task has no hidden tests
     tampering: list[str] = field(default_factory=list)  # what was detected, if anything
+    rate_limit_retries: int = 0  # times the provider had to wait after HTTP 429 during this task
     detail: str = ""  # human-readable explanation of the outcome
     run_id: str = ""
     trace_path: str = ""  # the JSON Lines trace of this run
@@ -119,7 +120,7 @@ def run_agent(
     path = trace_path(Path(trace_dir), run_id, task.id)
     stuck = RepeatedFailureDetector(limits.repeated_failure_limit)
     tools = tool_definitions(env.kind)  # descriptions must match where commands really run
-    steps = input_tokens = output_tokens = 0
+    steps = input_tokens = output_tokens = rate_limit_retries = 0
     cost = 0.0
     stop, detail = StopReason.ERROR, ""
 
@@ -130,6 +131,7 @@ def run_agent(
             outcome = AgentResult(
                 task_id=task.id, passed=verdict is Verdict.PASSED, verdict=verdict, stop_reason=stop_reason,
                 steps=steps, input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=cost,
+                rate_limit_retries=rate_limit_retries,
                 provider=settings.provider, model=settings.model, environment=env.kind,
                 prompt_version=AGENT_PROMPT_VERSION,
                 visible_passed=graded.visible_passed if graded else False,
@@ -175,6 +177,7 @@ def run_agent(
                     response = provider.complete(AGENT_SYSTEM_PROMPT, messages, tools=tools)
                     steps += 1
                     input_tokens += response.usage.input_tokens
+                    rate_limit_retries += response.rate_limit_retries
                     output_tokens += response.usage.output_tokens
                     call_cost = cost_usd(settings.model, response.usage)
                     cost += call_cost
@@ -183,7 +186,8 @@ def run_agent(
                         "model_call", step=steps, input_tokens=response.usage.input_tokens,
                         output_tokens=response.usage.output_tokens, cost_usd=call_cost,
                         total_tokens=input_tokens + output_tokens, total_cost_usd=cost,
-                        stop_reason=response.stop_reason, text=response.text,
+                        stop_reason=response.stop_reason, rate_limit_retries=response.rate_limit_retries,
+                        text=response.text,
                         tool_calls=[{"id": c.id, "name": c.name, "arguments": c.arguments} for c in response.tool_calls],
                     )
 
