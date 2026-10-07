@@ -20,10 +20,11 @@ from akeso.grading import GradeResult, Verdict, collect_changes, grade
 from akeso.llm.cost import cost_usd
 from akeso.llm.provider import Provider, get_provider
 from akeso.llm.types import Message
-from akeso.prompts import AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT, build_first_message
+from akeso.prompts import AGENT_PROMPT_VERSION, build_first_message, build_sql_first_message, system_prompt
 from akeso.sandbox import DockerSandbox
-from akeso.tasks import TaskError, load_task
-from akeso.tools import execute_tool, tool_definitions
+from akeso.sql_judge import SqlCheck, comparison_rules, support_files
+from akeso.tasks import Task, load_task
+from akeso.tools import Check, execute_tool, tool_definitions
 from akeso.trace import DEFAULT_TRACE_DIR, TraceWriter, new_run_id, trace_path
 
 TRACE_OUTPUT_LIMIT = 3000  # characters of each tool/check output kept in the trace
@@ -108,8 +109,6 @@ def run_agent(
     <trace_dir>/<run_id>/<task id>.jsonl.
     """
     task = load_task(task_dir)
-    if task.spec.kind != "code":
-        raise TaskError(f"{task.id}: {task.spec.kind!r} tasks aren't supported yet; only 'code' can run.")
     settings = settings or load_settings()
     limits = limits or settings.limits
     if max_steps is not None:
@@ -119,7 +118,10 @@ def run_agent(
     run_id = run_id or new_run_id()
     path = trace_path(Path(trace_dir), run_id, task.id)
     stuck = RepeatedFailureDetector(limits.repeated_failure_limit)
-    tools = tool_definitions(env.kind)  # descriptions must match where commands really run
+    tools = tool_definitions(env.kind, task.spec.kind)  # descriptions must match where commands really run
+    # How the task is checked: its test command, or (SQL) a comparison with the gold query.
+    sql_check = SqlCheck(task) if task.spec.kind == "sql" else None
+    check: Check = sql_check or (lambda e, **kwargs: e.run_checks(**kwargs))
     steps = input_tokens = output_tokens = rate_limit_retries = 0
     cost = 0.0
     stop, detail = StopReason.ERROR, ""
@@ -154,27 +156,24 @@ def run_agent(
             environment=env.kind, prompt_version=AGENT_PROMPT_VERSION, limits=limits,
         )
         with env:
-            env.start(task.root, task.private_dirs)
+            env.start(task.root, task.private_dirs,
+                      support_files=support_files(task, hidden=False) if sql_check else None)
             env.check_command = task.check_command
-            initial = env.run_checks()
+            if sql_check:
+                sql_check.prepare(env)  # before the model's first turn
+            initial = check(env)
             record_check("initial", initial)
             if initial.passed:
                 # Nothing to repair, so don't spend money asking the model.
                 return result(StopReason.ERROR, "Checks already pass before any change; task is invalid.")
 
-            readme = task.root / "README.md"
-            first = build_first_message(
-                readme.read_text(encoding="utf-8") if readme.is_file() else None,
-                initial.output,
-                task.spec.editable_paths,
-            )
-            messages = [Message.user(first)]
+            messages = [Message.user(_first_message(task, initial))]
             try:
                 while True:
                     if steps >= limits.max_steps:
                         stop = StopReason.MAX_STEPS
                         break
-                    response = provider.complete(AGENT_SYSTEM_PROMPT, messages, tools=tools)
+                    response = provider.complete(system_prompt(task.spec.kind), messages, tools=tools)
                     steps += 1
                     input_tokens += response.usage.input_tokens
                     rate_limit_retries += response.rate_limit_retries
@@ -194,14 +193,14 @@ def run_agent(
                     if not response.tool_calls:
                         # The model has stopped. Run the checks before saying why: it may
                         # have finished the fix without running them itself.
-                        final_check = env.run_checks()
+                        final_check = check(env)
                         record_check("stop", final_check)
                         stop = StopReason.PASSED if final_check.passed else StopReason.GAVE_UP
                         break
                     checks_passed = repeated = False
                     for call in response.tool_calls:
                         started = time.perf_counter()
-                        outcome = execute_tool(env, call)
+                        outcome = execute_tool(env, call, check=check)
                         trace.event(
                             "tool_call", step=steps, id=call.id, name=call.name, arguments=call.arguments,
                             is_error=outcome.is_error, duration=round(time.perf_counter() - started, 3),
@@ -237,17 +236,36 @@ def run_agent(
         # The agent's environment is gone now; grade in a brand-new one.
         graded = grade(task, changes, environment_factory)
         trace.event(
-            "grading", verdict=graded.verdict, visible_passed=graded.visible_passed,
+            "grading", task_kind=task.spec.kind, verdict=graded.verdict, visible_passed=graded.visible_passed,
             hidden_passed=graded.hidden_passed, applied=graded.applied,
             tampering=[str(f) for f in graded.tampering],
             visible_output=graded.visible_output, hidden_output=graded.hidden_output,
         )
-        return result(stop, detail or _explain(graded), graded)
+        return result(stop, detail or _explain(graded, task.spec.kind), graded)
 
 
-def _explain(graded: GradeResult) -> str:
+def _first_message(task: Task, initial: CheckResult) -> str:
+    """The opening message: the README and how the checks fail, plus the question, date and
+    schema for a SQL task."""
+    readme_path = task.root / "README.md"
+    readme = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else None
+    if task.spec.kind == "sql":
+        return build_sql_first_message(
+            readme, task.sql.question, task.sql.as_of.isoformat(), task.dataset.schema,
+            comparison_rules(task), initial.output,
+        )
+    return build_first_message(readme, initial.output, task.spec.editable_paths)
+
+
+def _explain(graded: GradeResult, task_kind: str = "code") -> str:
     if graded.verdict is Verdict.TAMPERED:
         return "Tampering detected: " + "; ".join(str(f) for f in graded.tampering)
+    if task_kind == "sql":
+        if graded.verdict is Verdict.PASSED:
+            return "Graded in a fresh environment: matches the gold query on the visible and hidden databases."
+        if not graded.visible_passed:
+            return f"Doesn't match the gold query on the visible database: {graded.visible_output.splitlines()[0]}"
+        return f"Matches on the visible database, but not on the hidden one: {graded.hidden_output.splitlines()[0]}"
     if graded.verdict is Verdict.PASSED:
         return "Graded in a fresh environment: visible and hidden tests pass."
     if not graded.visible_passed:

@@ -1,5 +1,9 @@
 """Judging SQL tasks: run queries in an environment and compare them with the gold query.
 
+Grading (grade_sql) works like code grading: a brand-new environment, only the agent's
+solution.sql applied, and the result must match the gold query's on the visible
+database and on a hidden one built from the task's hidden seed.
+
 The agent's check (SqlCheck) runs solution.sql on the visible database and compares it
 with the gold query's result there. The comparison happens here on the host, so the
 expected values never enter the agent's sandbox; the agent is told whether it passed,
@@ -12,13 +16,15 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from akeso import sql_runner
-from akeso.checks import CHECK_TIMEOUT_SECONDS, CheckResult
+from akeso.checks import CHECK_TIMEOUT_SECONDS, CheckResult, trim_output
 from akeso.environment import SUPPORT_DIR, Environment
+from akeso.grading import GRADE_OUTPUT_LIMIT, ChangeSet, GradeResult, Verdict
 from akeso.sql_compare import Comparison, QueryResult, compare_results
 from akeso.tasks import SQL_SOLUTION_FILE, Task
 
@@ -166,3 +172,50 @@ def preview(result: QueryResult) -> str:
 def _cell(value: Any) -> str:
     text = "NULL" if value is None else str(value)
     return text if len(text) <= PREVIEW_VALUE_CHARS else text[: PREVIEW_VALUE_CHARS - 3] + "..."
+
+
+def grade_sql(task: Task, changes: ChangeSet, make_environment: Callable[[], Environment]) -> GradeResult:
+    """Grade a SQL task in a brand-new environment: apply only the agent's allowed change
+    (solution.sql), then compare it with the gold query on the visible database and on the
+    hidden one. Both must match to pass."""
+    gold = gold_query(task)
+    outcomes: dict[str, tuple[QueryOutcome, QueryOutcome]] = {}
+    with make_environment() as env:
+        env.start(task.root, task.private_dirs, support_files=support_files(task, hidden=True))
+        for rel in changes.deleted:
+            env.delete_file(rel)
+        for rel, content in changes.written.items():
+            env.write_file(rel, content)
+        for db in (VISIBLE_DB, HIDDEN_DB):
+            outcomes[db] = (run_query_in(env, db, file=SQL_SOLUTION_FILE), run_query_in(env, db, sql=gold))
+
+    passed, reports = {}, {}
+    for db, (candidate, expected) in outcomes.items():
+        if not expected.ok:
+            raise SqlJudgeError(f"{task.id}: the gold query fails on {db}: {expected.error}")
+        assert expected.result is not None
+        if not candidate.ok:
+            passed[db], reports[db] = False, f"{SQL_SOLUTION_FILE} failed to run on {db}: {candidate.error}"
+            continue
+        assert candidate.result is not None
+        comparison = compare(task, candidate.result, expected.result)
+        passed[db] = comparison.matches
+        reports[db] = (f"{db}: matches the gold query" if comparison.matches else
+                       f"{db}: {comparison.reason} ({comparison.missing} expected row(s) missing, "
+                       f"{comparison.extra} unexpected)") + "\n" + preview(candidate.result)
+
+    if changes.findings:
+        verdict = Verdict.TAMPERED
+    elif passed[VISIBLE_DB] and passed[HIDDEN_DB]:
+        verdict = Verdict.PASSED
+    else:
+        verdict = Verdict.FAILED
+    return GradeResult(
+        verdict=verdict,
+        visible_passed=passed[VISIBLE_DB],
+        hidden_passed=passed[HIDDEN_DB],
+        applied=sorted([*changes.written, *changes.deleted]),
+        tampering=list(changes.findings),
+        visible_output=trim_output(reports[VISIBLE_DB], GRADE_OUTPUT_LIMIT),
+        hidden_output=trim_output(reports[HIDDEN_DB], GRADE_OUTPUT_LIMIT),
+    )

@@ -48,8 +48,12 @@ def story(events: list[dict[str, Any]], full: bool = False) -> str:
             for finding in event["tampering"]:
                 lines.append(f"  !! TAMPERING: {finding}")
         elif kind == "grading":
-            hidden = {True: "hidden tests passed", False: "hidden tests FAILED", None: "no hidden tests"}[event["hidden_passed"]]
-            visible = "visible tests passed" if event["visible_passed"] else "visible tests FAILED"
+            if event.get("task_kind") == "sql":
+                visible = "visible database matched" if event["visible_passed"] else "visible database DIDN'T MATCH"
+                hidden = "hidden database matched" if event["hidden_passed"] else "hidden database DIDN'T MATCH"
+            else:
+                hidden = {True: "hidden tests passed", False: "hidden tests FAILED", None: "no hidden tests"}[event["hidden_passed"]]
+                visible = "visible tests passed" if event["visible_passed"] else "visible tests FAILED"
             lines.append(f"\nGraded in a fresh environment: {event['verdict'].upper()} ({visible}, {hidden})")
             if not event["visible_passed"]:
                 lines += _indent(event["visible_output"], full)
