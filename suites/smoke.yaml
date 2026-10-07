@@ -1,4 +1,7 @@
-# Quick end-to-end check: small tasks covering single-file, boundary and cross-file bugs.
+# Quick end-to-end check: small tasks covering single-file, boundary, cross-file,
+# formatting and regression-guard bugs.
 - c001_mean
 - c002_shipping
 - c003_discount
+- c004_duration
+- c005_calendar
