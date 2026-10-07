@@ -219,3 +219,17 @@ def grade_sql(task: Task, changes: ChangeSet, make_environment: Callable[[], Env
         visible_output=trim_output(reports[VISIBLE_DB], GRADE_OUTPUT_LIMIT),
         hidden_output=trim_output(reports[HIDDEN_DB], GRADE_OUTPUT_LIMIT),
     )
+
+
+def gold_results_differ(task: Task, make_environment: Callable[[], Environment]) -> bool:
+    """Does the gold query give a different result on the hidden database than on the
+    visible one? If not, the hidden database can't catch a query tuned to the visible data."""
+    gold = gold_query(task)
+    with make_environment() as env:
+        env.start(task.root, task.private_dirs, support_files=support_files(task, hidden=True))
+        visible, hidden = (run_query_in(env, db, sql=gold) for db in (VISIBLE_DB, HIDDEN_DB))
+    for db, outcome in ((VISIBLE_DB, visible), (HIDDEN_DB, hidden)):
+        if not outcome.ok:
+            raise SqlJudgeError(f"{task.id}: the gold query fails on {db}: {outcome.error}")
+    assert visible.result is not None and hidden.result is not None
+    return not compare(task, hidden.result, visible.result).matches
