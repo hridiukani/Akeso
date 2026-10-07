@@ -6,12 +6,13 @@ import json
 import logging
 import random
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
 import openai
 
+from akeso.llm.pacing import RateLimitBudget, RateLimitHeaders, estimate_tokens
 from akeso.llm.types import (
     Message,
     ModelResponse,
@@ -53,6 +54,7 @@ class GroqProvider:
         max_delay: float = 30.0,
         sleep: Callable[[float], None] = time.sleep,
         max_tool_call_attempts: int = 3,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.model = model
         self.max_attempts = max_attempts
@@ -60,6 +62,9 @@ class GroqProvider:
         self.base_delay = base_delay
         self.max_delay = max_delay
         self._sleep = sleep  # injectable so tests don't actually wait
+        # Groq reports its remaining quota in response headers; waiting for it to refill
+        # before a call that would exceed it avoids most HTTP 429s.
+        self.budget = RateLimitBudget(clock=clock)
         # max_retries=0: the SDK would otherwise retry 429s itself; we own the retry policy.
         self._client = openai.OpenAI(api_key=api_key, base_url=GROQ_BASE_URL, max_retries=0)
 
@@ -77,6 +82,10 @@ class GroqProvider:
         if tools:
             request["tools"] = [_to_openai_tool(t) for t in tools]
 
+        wait = self.budget.wait_before(estimate_tokens(request))
+        if wait > 0:
+            logger.debug("Waiting %.1fs for Groq's token quota to refill", wait)
+            self._sleep(wait)
         response, rate_limit_retries = self._create_with_retry(request)
         return replace(_from_openai_response(response), rate_limit_retries=rate_limit_retries)
 
@@ -92,8 +101,11 @@ class GroqProvider:
         rate_limited = rejected = 0
         while True:
             try:
-                return self._client.chat.completions.create(**request), rate_limited
+                response, headers = self._send(request)
+                self.budget.update(RateLimitHeaders.parse(headers))
+                return response, rate_limited
             except openai.RateLimitError as error:
+                self.budget.update(RateLimitHeaders.parse(error.response.headers))
                 rate_limited += 1
                 if rate_limited >= self.max_attempts:
                     raise RateLimitExhausted(
@@ -101,7 +113,7 @@ class GroqProvider:
                         "Wait a minute and try again, or reduce how often requests are sent."
                     ) from error
                 delay = self._retry_delay(rate_limited, error)
-                logger.warning(
+                logger.debug(
                     "Groq rate limited (HTTP 429); retrying in %.1fs (attempt %d/%d)",
                     delay, rate_limited, self.max_attempts,
                 )
@@ -115,10 +127,15 @@ class GroqProvider:
                         f"Groq rejected the model's tool call as invalid {rejected} times in a row "
                         "(HTTP 400 tool_use_failed)."
                     ) from error
-                logger.warning(
+                logger.debug(
                     "Groq rejected an invalid tool call from the model (tool_use_failed); asking again (%d/%d)",
                     rejected, self.max_tool_call_attempts,
                 )
+
+    def _send(self, request: dict[str, Any]) -> tuple[Any, Mapping[str, str]]:
+        """One API call, returning the parsed reply and the HTTP response headers."""
+        raw = self._client.chat.completions.with_raw_response.create(**request)
+        return raw.parse(), raw.headers
 
     def _retry_delay(self, attempt: int, error: openai.RateLimitError) -> float:
         """Use the server's retry-after if given, else exponential backoff with jitter."""

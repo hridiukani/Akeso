@@ -38,13 +38,13 @@ def provider_with(outcomes: list, **kwargs) -> tuple[GroqProvider, list[float]]:
     provider = GroqProvider(api_key="fake", model="openai/gpt-oss-120b", sleep=sleeps.append, **kwargs)
     remaining = list(outcomes)
 
-    def create(**request):
+    def send(request):
         outcome = remaining.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
-        return outcome
+        return outcome, {}
 
-    provider._client.chat.completions.create = create
+    provider._send = send
     return provider, sleeps
 
 
@@ -105,3 +105,52 @@ def test_no_retries_reported_when_not_rate_limited() -> None:
     provider, _ = provider_with([tool_use_failed(), OK])  # a rejected tool call isn't a rate limit
 
     assert ask(provider).rate_limit_retries == 0
+
+
+def test_waits_for_the_token_quota_before_a_call_that_would_exceed_it() -> None:
+    low_quota = {"x-ratelimit-limit-tokens": "8000", "x-ratelimit-remaining-tokens": "100", "x-ratelimit-reset-tokens": "30s"}
+    sleeps: list[float] = []
+    provider = GroqProvider(api_key="fake", model="openai/gpt-oss-120b", sleep=sleeps.append, clock=lambda: 0.0)
+    replies = [(OK, low_quota), (OK, {})]
+    provider._send = lambda request: replies.pop(0)
+
+    ask(provider)  # no headers seen yet: no wait
+    assert sleeps == []
+    ask(provider)  # ~1000 tokens needed, 100 left: wait for some to refill, without a 429
+    assert len(sleeps) == 1 and 0 < sleeps[0] <= 30
+
+
+def test_rate_limit_headers_on_a_429_are_remembered() -> None:
+    error = openai.RateLimitError(
+        "rate limited", body=None,
+        response=httpx.Response(429, headers={"x-ratelimit-remaining-tokens": "0", "x-ratelimit-reset-tokens": "12s"},
+                                request=httpx.Request("POST", "https://api.groq.com")),
+    )
+    provider, _ = provider_with([error, OK])
+    ask(provider)
+
+    assert provider.budget._latest is not None and provider.budget._latest.reset_tokens == 12.0
+
+
+def test_retries_are_quiet(caplog: pytest.LogCaptureFixture) -> None:
+    provider, _ = provider_with([rate_limited(), tool_use_failed(), OK])
+
+    with caplog.at_level("INFO"):
+        ask(provider)
+
+    assert caplog.records == []  # counted per task instead of printing a line per retry
+
+
+def test_send_reads_headers_through_the_real_sdk() -> None:
+    body = {"id": "x", "object": "chat.completion", "created": 0, "model": "m",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 1, "total_tokens": 4}}
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=body, headers={"x-ratelimit-remaining-tokens": "42"}))
+    provider = GroqProvider(api_key="fake", model="m")
+    provider._client = openai.OpenAI(api_key="fake", base_url="https://example.invalid/v1", max_retries=0,
+                                     http_client=httpx.Client(transport=transport))
+
+    reply = ask(provider)
+
+    assert reply.text == "hi"
+    assert provider.budget._latest.remaining_tokens == 42
