@@ -9,7 +9,10 @@ the engineering list.
 - **Token-aware pacing for Groq.** The 2-second gap between calls didn't stop the 429s
   (17 on five small tasks in the Topic 6 smoke run), which points to Groq's tokens-per-
   minute limit rather than its requests-per-minute limit. Read its remaining-quota response
-  headers, or pace by tokens sent, to cut the time spent in backoff.
+  headers, or pace by tokens sent, to cut the time spent in backoff. Once it exists, make
+  the rate-limit retry messages quieter (for example log them at debug level, or print one
+  summary line per task), since retries will be rare and are already counted per task in
+  the results (rate_limit_retries) and the run summary.
 - **More validator checks.** `akeso validate` should also fail a task that contains
   symlinks, or whose hidden test file names collide with visible ones (pytest refuses two
   test files with the same name).
@@ -45,6 +48,9 @@ the engineering list.
 
 ## Experiment candidates (don't implement before the baseline is measured)
 
+- **Verify-before-stop.** When the model stops calling tools and the checks aren't passing,
+  run them and send the failure back so the agent continues instead of ending. Evidence:
+  in run 20261007-215234-a20e17, c003 and c005 stopped without the model running checks.
 - **Trim conversation history.** The whole history is resent every step (input grew from
   1.4k to 2k tokens per call on c003). Shortening old tool outputs, or prompt caching once
   the Anthropic provider exists, could cut cost, but may change pass rate. Measure first.
