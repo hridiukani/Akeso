@@ -11,10 +11,13 @@ from pathlib import Path
 
 import pytest
 
+from fakes import make_sql_task
 from akeso import sql_runner
 from akeso.datasets import load_dataset
 from akeso.environment import SUPPORT_DIR, EnvError
+from akeso.grading import ChangeSet, Verdict, changes_from_files, grade
 from akeso.sandbox import DockerSandbox
+from akeso.tasks import load_task
 from akeso.workspace import LocalWorkspace
 
 DB = load_dataset("saas", Path("tasks/datasets")).build(11)
@@ -115,3 +118,15 @@ def test_support_files_are_not_part_of_the_task_files(sandbox: DockerSandbox) ->
 def test_local_workspace_refuses_support_files(tmp_path: Path) -> None:
     with LocalWorkspace() as workspace, pytest.raises(EnvError, match="require the Docker sandbox"):
         workspace.start(tmp_path, support_files={"visible.db": DB})
+
+
+@pytest.mark.docker
+def test_grading_a_sql_task_in_docker(tmp_path: Path) -> None:
+    gold = "SELECT country, count(*) FROM customers GROUP BY country;\n"
+    task = load_task(make_sql_task(tmp_path / "tasks", "SELECT country, count(*) FROM customers WHERE country IS NOT NULL GROUP BY country;\n", gold))
+
+    broken = grade(task, ChangeSet(), DockerSandbox)
+    fixed = grade(task, changes_from_files(task, {"solution.sql": gold.replace("count(*)", "count(customer_id)")}), DockerSandbox)
+
+    assert broken.verdict is Verdict.FAILED and not broken.visible_passed
+    assert fixed.verdict is Verdict.PASSED and fixed.visible_passed and fixed.hidden_passed
