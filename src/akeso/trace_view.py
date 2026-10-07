@@ -20,10 +20,12 @@ def story(events: list[dict[str, Any]], full: bool = False) -> str:
                 f"Limits: {limits['max_steps']} steps, ${limits['max_cost_usd']}, "
                 f"{limits['max_total_tokens']} tokens, stop after {limits['repeated_failure_limit']} identical failures",
             ]
-        elif kind == "check" and event["phase"] in ("initial", "final"):
+        elif kind == "check" and event["phase"] in ("initial", "final", "stop"):
             verdict = "PASSED" if event["passed"] else f"FAILED (exit {event['exit_code']})"
-            lines.append(f"\n{event['phase'].capitalize()} check: {verdict} in {event['duration']}s")
-            lines += _indent(event["output"], full)
+            label = "Check after the model stopped" if event["phase"] == "stop" else f"{event['phase'].capitalize()} check"
+            lines.append(f"\n{label}: {verdict} in {event['duration']}s")
+            if event["phase"] != "stop" or not event["passed"]:
+                lines += _indent(event["output"], full)
         elif kind == "model_call":
             lines.append(
                 f"\nStep {event['step']}: model used {event['input_tokens']} in / {event['output_tokens']} out tokens"

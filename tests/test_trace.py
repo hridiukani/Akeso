@@ -148,3 +148,17 @@ def test_trace_command_prints_utf8_even_when_piped(tmp_path: Path) -> None:
     )
 
     assert "\u00b1".encode("utf-8") in completed.stdout
+
+
+def test_story_shows_the_check_when_the_model_stops(task_dir: Path, tmp_path: Path) -> None:
+    provider = ScriptedProvider([
+        tool_reply(("apply_edit", {"path": "src/stats.py", "old_str": "(len(n) - 1)", "new_str": "len(n)"})),
+        text_reply("Done."),
+    ])
+    result = run_agent(task_dir, settings=SETTINGS, provider=provider,
+                       environment_factory=FakeFactory(checks=fixed_when_edited), trace_dir=tmp_path)
+
+    text = story(read_trace(Path(result.trace_path)))
+
+    assert "Check after the model stopped: PASSED" in text
+    assert "RESULT: PASSED  (verdict: passed, stop reason: passed)" in text

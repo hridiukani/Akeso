@@ -34,12 +34,14 @@ EnvironmentFactory = Callable[[], Environment]
 class StopReason(str, Enum):
     """Why the agent loop ended (not whether the task was solved: that's the verdict)."""
 
-    PASSED = "passed"  # the agent's own check run passed
+    # Checks passed in the agent's environment when the loop ended: either the model's own
+    # run_checks, or the check we run when it stops calling tools.
+    PASSED = "passed"
     MAX_STEPS = "max_steps"
     MAX_COST = "max_cost"
     MAX_TOKENS = "max_tokens"
     REPEATED_FAILURE = "repeated_failure"  # the same failing check output N times in a row
-    GAVE_UP = "gave_up"  # the model stopped calling tools
+    GAVE_UP = "gave_up"  # the model stopped calling tools while the checks were still failing
     ERROR = "error"
 
 
@@ -186,7 +188,11 @@ def run_agent(
                     )
 
                     if not response.tool_calls:
-                        stop = StopReason.GAVE_UP
+                        # The model has stopped. Run the checks before saying why: it may
+                        # have finished the fix without running them itself.
+                        final_check = env.run_checks()
+                        record_check("stop", final_check)
+                        stop = StopReason.PASSED if final_check.passed else StopReason.GAVE_UP
                         break
                     checks_passed = repeated = False
                     for call in response.tool_calls:

@@ -94,11 +94,30 @@ def test_failures_differing_only_in_timing_count_as_repeated(task_dir: Path, tmp
 
 
 def test_model_gives_up(task_dir: Path, tmp_path: Path) -> None:
-    result, _, _ = run(task_dir, tmp_path, [tool_reply(READ), text_reply("I can't work out what's wrong.")])
+    result, _, factory = run(task_dir, tmp_path, [tool_reply(READ), text_reply("I can't work out what's wrong.")])
 
     assert not result.passed
     assert result.stop_reason is StopReason.GAVE_UP
     assert result.steps == 2
+    assert factory.agent_env.check_runs == 2  # initial, plus the check when it stopped
+
+
+def test_model_stops_after_a_real_fix_without_running_checks(task_dir: Path, tmp_path: Path) -> None:
+    # The model fixes the bug and simply says so, never calling run_checks itself.
+    result, _, factory = run(task_dir, tmp_path, [tool_reply(FIX), text_reply("Fixed: divide by len(n).")])
+
+    assert result.stop_reason is StopReason.PASSED  # we ran the checks when it stopped
+    assert result.passed and result.verdict is Verdict.PASSED
+    assert result.steps == 2
+    assert factory.agent_env.check_runs == 2  # initial, plus the check when it stopped
+
+
+def test_model_stops_with_checks_still_failing_is_gave_up(task_dir: Path, tmp_path: Path) -> None:
+    wrong_fix = ("apply_edit", {"path": "src/stats.py", "old_str": "sum(n)", "new_str": "sum(n) * 1"})
+    result, _, _ = run(task_dir, tmp_path, [tool_reply(wrong_fix), text_reply("That should do it.")])
+
+    assert result.stop_reason is StopReason.GAVE_UP
+    assert not result.passed and result.verdict is Verdict.FAILED
 
 
 def test_model_recovers_from_a_tool_error(task_dir: Path, tmp_path: Path) -> None:
