@@ -4,23 +4,27 @@ Technical to-do list for building Akeso: deferred suggestions and known gaps, gr
 when they'll be handled. Learning material lives in LEARNING.md (local only); this file is
 the engineering list.
 
-## Next topic: tamper detection, hidden tests, eval suite
+## Done in Topic 6 (tasks, cheat-proof grading and the run command)
 
-- **Symlinked test config escapes the judge restore.** `list_files` skips symlinks, so a
-  `conftest.py` the agent creates as a link isn't deleted, and pytest would still load it.
-- **Code-level tampering isn't caught.** `sitecustomize.py`, `.pth` files, or src code that
-  monkeypatches pytest survive restoring `tests/` and the pytest config.
-- **Fresh container for the final check.** Copy only the agent's source changes plus the
-  original tests into a new container, so nothing left in the old container (processes,
-  edited caches) can influence the verdict.
-- **A `TAMPERED` stop reason.** "Model's checks passed but the final check failed" is
-  reported as `gave_up` today; a dedicated reason makes these cases countable.
-- **`task_id` in `AgentResult`, plus a batch runner with `--run-id`.** One folder and one
-  summary per suite run; today `scripts/run_agent.py` handles one task per run id.
-- **Automatic task validation.** Store each known fix outside the task and check in CI that
-  every task fails as-is and passes with its fix (done by hand for c001 to c003).
-- **Pace calls for Groq.** Seven HTTP 429s on three small tasks; a 30-task suite needs a
-  minimum gap between calls or fewer tasks at once.
+- **Symlinked test config escaped the judge restore.** Done (step 6.3): any symlink in the
+  agent's environment is recorded as tampering and never carried into grading.
+- **Code-level tampering wasn't caught.** Done (step 6.3): conftest.py, sitecustomize.py,
+  usercustomize.py, *.pth, pytest config, and edited source importing pytest/_pytest/pluggy
+  are flagged. Remaining gaps are in LEARNING.md's Known limitations.
+- **Fresh container for the final check.** Done (step 6.2): grading applies only editable
+  regular-file changes to a brand-new environment built from the pristine task.
+- **A `TAMPERED` stop reason.** Done (step 6.3): `tampered` is a verdict with the findings
+  recorded, separate from the stop reason.
+- **`task_id` in `AgentResult`, plus a batch runner with `--run-id`.** Done (steps 6.2,
+  6.6, 6.7): results carry task_id; `akeso run --suite NAME --run-id ID` writes one folder
+  per run with a trace per task and summary.json.
+- **Automatic task validation.** Done (step 6.5): `akeso validate` grades each task's broken
+  version (must fail) and reference solution (must pass visible and hidden tests) in Docker.
+- **Pace calls for Groq.** Done (step 6.6): a per-provider minimum gap between calls
+  (GROQ_MIN_CALL_INTERVAL, default 2s). Note: the smoke run still hit 429s, so Groq's limit
+  looks token-based (see the Topic 6 suggestions).
+- **Sweep leftover containers at the start of every CLI run.** Done (step 6.6): every batch
+  run (and so `akeso run`) sweeps containers older than an hour before a Docker run.
 
 ## Experiment candidates (don't implement before the baseline is measured)
 
@@ -30,14 +34,6 @@ the engineering list.
 - **"No progress" detection beyond checks.** Stop runs that repeat identical reads or edits
   sooner (today only identical failing checks, max steps and tokens stop them). Stopping
   earlier can also stop a run that would have recovered. Measure first.
-
-## CLI topic
-
-- **Sweep leftover containers at the start of every CLI run.** The age-based
-  `cleanup_leftover_containers()` (labelled containers older than `LEFTOVER_MAX_AGE`, 1 hour)
-  runs automatically only at the start of a test session (`tests/conftest.py`). Until the
-  CLI calls it too, containers left by hard crashes during real runs pile up until
-  `python scripts/cleanup_containers.py` is run.
 
 ## Polish topic
 
