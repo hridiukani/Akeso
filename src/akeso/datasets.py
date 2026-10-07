@@ -39,15 +39,6 @@ class Dataset:
         """Every file that defines this dataset (for hashing: a change here changes every task using it)."""
         return sorted(p for p in self.root.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
 
-    def table_names(self) -> list[str]:
-        """The tables the schema creates, sorted."""
-        conn = sqlite3.connect(":memory:")
-        try:
-            conn.executescript(self.schema)
-            return [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
-        finally:
-            conn.close()
-
     def build(self, seed: int) -> bytes:
         """The database for this seed, as SQLite file bytes. Same seed, same bytes."""
         return _build(self.root.resolve(), seed)

@@ -18,6 +18,7 @@ dependencies = [
     "pyyaml",
     "typer",
     "rich",
+    "sqlglot",  # parses SQL for the hardcoding check (a real parser, not text matching)
 ]
 
 [project.scripts]

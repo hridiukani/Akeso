@@ -20,10 +20,6 @@ def scalar(conn: sqlite3.Connection, sql: str):
     return conn.execute(sql).fetchone()[0]
 
 
-def test_tables() -> None:
-    assert SAAS.table_names() == ["customers", "payments", "plans", "subscriptions"]
-
-
 def test_same_seed_same_bytes() -> None:
     first = SAAS.build(5)
     _build.cache_clear()  # really generate it again
