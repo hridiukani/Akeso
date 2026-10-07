@@ -1,3 +1,9 @@
+# Note for task authors: overfitting is NOT behaviourally detectable for this task.
+# The bug is wrong for exactly one input (an order of exactly $50). A fix that special-
+# cases 50.0 returns the right answer there, and every other input already worked, so it
+# behaves exactly like the real fix for every possible input; no hidden test can tell
+# them apart. The hidden tests therefore guard every tier boundary instead, catching fixes
+# that break another tier. See TASK_GUIDE.md, section 4.
 id: c002_shipping
 kind: code
 description: shipping_cost() uses > instead of >= for the free-shipping threshold, so exactly $50 is charged.
