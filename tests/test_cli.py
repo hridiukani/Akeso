@@ -61,6 +61,7 @@ def test_run_prints_table_and_totals(fake_run) -> None:
         assert text in out.output
     assert "Passed 1/3 (33%), tampered 1" in out.output
     assert "average steps 9.0" in out.output and "total tokens 40,800" in out.output
+    assert "rate-limit retries 0" in out.output
     assert "Run folder: runs" in out.output and "run-xyz" in out.output
 
 

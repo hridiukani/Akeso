@@ -115,6 +115,7 @@ def run(
         + f" | average steps {t['average_steps']:.1f}"
         + f" | total tokens {t['total_input_tokens'] + t['total_output_tokens']:,}"
         + f" | total cost ${t['total_cost_usd']:.4f}"
+        + f" | rate-limit retries {t['total_rate_limit_retries']}"
     )
     console.print(f"Run folder: {summary.run_dir}")
 
