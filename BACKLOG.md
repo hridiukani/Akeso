@@ -4,19 +4,6 @@ Technical to-do list for building Akeso: deferred suggestions and known gaps, gr
 when they'll be handled. Learning material lives in LEARNING.md (local only); this file is
 the engineering list.
 
-## Next topic: SQL tasks
-
-- **Token-aware pacing for Groq.** The 2-second gap between calls didn't stop the 429s
-  (17 on five small tasks in the Topic 6 smoke run), which points to Groq's tokens-per-
-  minute limit rather than its requests-per-minute limit. Read its remaining-quota response
-  headers, or pace by tokens sent, to cut the time spent in backoff. Once it exists, make
-  the rate-limit retry messages quieter (for example log them at debug level, or print one
-  summary line per task), since retries will be rare and are already counted per task in
-  the results (rate_limit_retries) and the run summary.
-- **More validator checks.** `akeso validate` should also fail a task that contains
-  symlinks, or whose hidden test file names collide with visible ones (pytest refuses two
-  test files with the same name).
-
 ## Measurement topic
 
 - **Anthropic provider, with prompt caching.** Every official number must come from the
@@ -69,6 +56,16 @@ the engineering list.
   removing the container kills everything). Accepted while local mode is opt-in. Fix: start
   the command in its own process group (`start_new_session=True` on Unix,
   `CREATE_NEW_PROCESS_GROUP` plus a tree kill on Windows) and kill the group on timeout.
+
+## Done in Topic 7 (SQL tasks)
+
+- **Token-aware pacing for Groq.** Done (step 7.1): the Groq provider reads its
+  x-ratelimit-* headers and waits for the token quota to refill before a call that would
+  exceed it; backoff on 429 is the fallback. Retry messages are logged at debug level; the
+  count is in each result, summary.json and the end-of-run line.
+- **More validator checks.** Done (step 7.7): `akeso validate` fails a task containing
+  symlinks (in the task or its dataset) and a code task whose hidden test file names
+  collide with visible ones.
 
 ## Done in Topic 6 (tasks, cheat-proof grading and the run command)
 
