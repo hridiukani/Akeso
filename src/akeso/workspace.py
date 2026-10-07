@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
@@ -92,7 +92,12 @@ class LocalWorkspace:
         self.check_command = list(PYTEST_COMMAND)
         self.root: Path | None = None
 
-    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
+    def start(
+        self, task_dir: str | Path, private_dirs: Sequence[str] = (), support_files: Mapping[str, bytes] | None = None
+    ) -> None:
+        if support_files:
+            # Files on this machine can't be made unchangeable for the task's own code.
+            raise EnvError("Read-only support files (needed by SQL tasks) require the Docker sandbox.")
         if self.root is not None:
             raise EnvError("Workspace already started; call stop() first.")
         self.root = create_workspace(task_dir, private_dirs)

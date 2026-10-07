@@ -9,7 +9,7 @@ from __future__ import annotations
 import io
 import tarfile
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from types import TracebackType
@@ -19,7 +19,7 @@ from docker.errors import DockerException, ImageNotFound, NotFound
 from docker.models.containers import Container
 
 from akeso.checks import CHECK_TIMEOUT_SECONDS, PYTEST_COMMAND, CheckResult, run_checks
-from akeso.environment import EnvError, ExecResult, FileTooLargeError
+from akeso.environment import SUPPORT_DIR, EnvError, ExecResult, FileTooLargeError
 from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
 __all__ = ["DockerSandbox", "ExecResult", "FileTooLargeError", "SandboxError"]
@@ -70,8 +70,11 @@ class DockerSandbox:
         self.check_command = list(PYTEST_COMMAND)
         self.container: Container | None = None
 
-    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
-        """Create the container, copy the task files into /workspace, and start it."""
+    def start(
+        self, task_dir: str | Path, private_dirs: Sequence[str] = (), support_files: Mapping[str, bytes] | None = None
+    ) -> None:
+        """Create the container, copy the task files into /workspace and any support files
+        into SUPPORT_DIR (root-owned, read-only), and start it."""
         if self.container is not None:
             raise SandboxError("Sandbox already started; call stop() first.")
         source = Path(task_dir).resolve()
@@ -102,6 +105,8 @@ class DockerSandbox:
         )
         try:
             self.container.put_archive(WORKDIR, _tar_folder(source, private_dirs))
+            if support_files:
+                self.container.put_archive("/", _tar_support_files(support_files))
             self.container.start()
         except Exception:
             self.stop()  # don't leave a half-built container behind
@@ -305,6 +310,25 @@ def _owned_tarinfo(name: str, is_dir: bool) -> tarfile.TarInfo:
     info.mode = 0o755 if is_dir else 0o644
     info.mtime = int(time.time())
     return info
+
+
+def _tar_support_files(files: Mapping[str, bytes]) -> bytes:
+    """A tar of SUPPORT_DIR holding `files`, all owned by root: the folder can't be written
+    to and the files can only be read, so the sandbox user can use them but not change,
+    replace or delete them."""
+    folder = SUPPORT_DIR.strip("/")
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        directory = tarfile.TarInfo(folder)
+        directory.type, directory.mode, directory.mtime = tarfile.DIRTYPE, 0o755, int(time.time())
+        archive.addfile(directory)
+        for name, data in sorted(files.items()):
+            if not name or "/" in name or "\\" in name or name in (".", ".."):
+                raise SandboxError(f"Support file name {name!r} must be a plain file name.")
+            info = tarfile.TarInfo(f"{folder}/{name}")
+            info.size, info.mode, info.mtime = len(data), 0o444, int(time.time())
+            archive.addfile(info, io.BytesIO(data))  # uid/gid 0: root
+    return buffer.getvalue()
 
 
 def _tar_folder(folder: Path, private_dirs: Sequence[str] = ()) -> bytes:

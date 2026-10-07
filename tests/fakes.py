@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import contextlib
+import io
+import shlex
+import tempfile
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
+from akeso import sql_runner
 from akeso.checks import CheckResult
-from akeso.environment import ExecResult
+from akeso.environment import SUPPORT_DIR, ExecResult
 from akeso.llm.types import Message, ModelResponse, ToolCall, ToolDefinition, Usage
 from akeso.paths import UnsafePathError, is_excluded_task_file, safe_relative_path
 
@@ -23,7 +28,8 @@ class FakeEnvironment:
     """Implements the Environment protocol with a dict of files.
 
     start() loads the real files of task_dir (so judge-restore code can compare against
-    them). run_checks() is decided by `checks`, exec() by `on_exec`. `raise_on` makes a
+    them). run_checks() is decided by `checks`, exec() by `on_exec`, except that calls to
+    the SQL query runner really run it (in-process, on the support files). `raise_on` makes a
     named method raise an exception, to test error handling.
     """
 
@@ -44,12 +50,17 @@ class FakeEnvironment:
         self.raise_on = raise_on or {}
         self.files: dict[str, str] = {}
         self.links: dict[str, str] = {}  # link path -> target, to simulate symlinks
+        self.support_files: dict[str, bytes] = {}  # what SUPPORT_DIR would hold
+        self.commands: list[str | Sequence[str]] = []  # every exec, in order
         self.started = False
         self.stopped = False
         self.check_runs = 0
 
-    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
+    def start(
+        self, task_dir: str | Path, private_dirs: Sequence[str] = (), support_files: Mapping[str, bytes] | None = None
+    ) -> None:
         self._maybe_raise("start")
+        self.support_files = dict(support_files or {})
         root = Path(task_dir)
         for path in root.rglob("*"):
             rel = path.relative_to(root).as_posix()
@@ -93,7 +104,9 @@ class FakeEnvironment:
 
     def exec(self, cmd: str | Sequence[str], timeout: float) -> ExecResult:
         self._maybe_raise("exec")
-        return self.on_exec(self, cmd)
+        self.commands.append(cmd)
+        sql = run_sql_runner(self, cmd)
+        return sql if sql is not None else self.on_exec(self, cmd)
 
     def run_checks(self, timeout: float = 60, command: Sequence[str] | None = None) -> CheckResult:
         self._maybe_raise("run_checks")
@@ -125,6 +138,36 @@ class FakeEnvironment:
         tb: TracebackType | None,
     ) -> None:
         self.stop()
+
+
+def run_sql_runner(env: FakeEnvironment, cmd: str | Sequence[str]) -> ExecResult | None:
+    """If cmd calls SUPPORT_DIR/run_query.py, run the real runner on the fake's files.
+
+    The support files and the workspace files are written to a temporary folder and every
+    SUPPORT_DIR path is pointed there. Returns None for any other command."""
+    argv = shlex.split(cmd) if isinstance(cmd, str) else list(cmd)
+    runner = f"{SUPPORT_DIR}/run_query.py"
+    if runner not in argv or "run_query.py" not in env.support_files:
+        return None
+    args = argv[argv.index(runner) + 1:]
+    with tempfile.TemporaryDirectory() as tmp:
+        support, workspace = Path(tmp, "support"), Path(tmp, "workspace")
+        support.mkdir()
+        for name, data in env.support_files.items():
+            (support / name).write_bytes(data)
+        for rel, content in env.files.items():
+            (workspace / rel).parent.mkdir(parents=True, exist_ok=True)
+            (workspace / rel).write_text(content, encoding="utf-8", newline="")
+        args = [a.replace(SUPPORT_DIR, str(support)) for a in args]
+        if "--file" in args:
+            index = args.index("--file") + 1
+            args[index] = str(workspace / args[index])
+        if "--db" not in args:
+            args += ["--db", str(support / "visible.db")]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = sql_runner.main(args)
+    return ExecResult(code, out.getvalue())
 
 
 class ScriptedProvider:

@@ -7,7 +7,7 @@ needs to know which one it's talking to.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -15,6 +15,12 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:  # avoid an import cycle: checks.py imports this module
     from akeso.checks import CheckResult
+
+
+# Where support files (e.g. a SQL task's query runner and database) live in an environment:
+# outside the task folder, owned by root and read-only, so the agent can use them but
+# never change them, and they never count as the agent's changes.
+SUPPORT_DIR = "/akeso"
 
 
 class EnvError(Exception):
@@ -43,10 +49,13 @@ class Environment(Protocol):
     kind: str  # short name recorded in results, e.g. "docker" or "local"
     check_command: list[str]  # how run_checks runs the tests; set from the task's check_command
 
-    def start(self, task_dir: str | Path, private_dirs: Sequence[str] = ()) -> None:
+    def start(
+        self, task_dir: str | Path, private_dirs: Sequence[str] = (), support_files: Mapping[str, bytes] | None = None
+    ) -> None:
         """Copy the task into the environment, leaving out private_dirs (hidden tests,
         solution) and everything paths.is_excluded_task_file excludes. The original task
-        folder is never modified."""
+        folder is never modified. support_files (name -> bytes) are put read-only in
+        SUPPORT_DIR; environments that can't do that raise EnvError."""
         ...
 
     def stop(self) -> None:
