@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import shlex
+import shutil
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
@@ -240,6 +241,39 @@ description: A test task.
 editable_paths: [src/]
 split: dev
 """
+
+
+SQL_TASK_YAML = """\
+id: {task_id}
+kind: sql
+description: A test SQL task.
+editable_paths: [solution.sql]
+split: dev
+sql:
+  question: {question}
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 11
+  hidden_seed: 911
+  order_matters: {order_matters}
+"""
+REAL_DATASETS = Path(__file__).resolve().parent.parent / "tasks" / "datasets"
+
+
+def make_sql_task(
+    tasks_root: Path, broken: str, gold: str, task_id: str = "s001_demo",
+    question: str = "How many plans are there?", order_matters: bool = False,
+) -> Path:
+    """Write a SQL task under tasks_root/sql (with the real saas dataset beside it) and return it."""
+    shutil.copytree(REAL_DATASETS / "saas", tasks_root / "datasets" / "saas", dirs_exist_ok=True)
+    task = tasks_root / "sql" / task_id
+    (task / "solution").mkdir(parents=True, exist_ok=True)
+    (task / "task.yaml").write_text(
+        SQL_TASK_YAML.format(task_id=task_id, question=question, order_matters=str(order_matters).lower()), newline="\n")
+    (task / "README.md").write_text(f"{question}\n", newline="\n")
+    (task / "solution.sql").write_text(broken, newline="\n")
+    (task / "solution" / "solution.sql").write_text(gold, newline="\n")
+    return task
 
 
 def make_task(root: Path, files: dict[str, str], task_id: str = "t001_demo") -> Path:

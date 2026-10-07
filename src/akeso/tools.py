@@ -10,15 +10,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import PurePosixPath
 
 from jsonschema import Draft202012Validator, ValidationError
 
-from akeso.checks import CHECK_TIMEOUT_SECONDS, trim_output
+from akeso.checks import CHECK_TIMEOUT_SECONDS, CheckResult, trim_output
 from akeso.environment import EnvError, Environment
 from akeso.llm.types import ToolCall, ToolDefinition
 from akeso.paths import UnsafePathError, safe_relative_path
 from akeso.sandbox import SandboxError
+
+# How a task is checked: the environment's own test command for code tasks, or a
+# comparison with the gold query for SQL tasks (sql_judge.SqlCheck).
+Check = Callable[..., CheckResult]  # (env, timeout=...) -> CheckResult
 
 COMMAND_TIMEOUT_SECONDS = 60
 OUTPUT_LIMIT = 6000  # characters of command/test output returned to the model (the end is kept)
@@ -140,11 +145,13 @@ def run_command(env: Environment, command: str, timeout: float = COMMAND_TIMEOUT
 # --- run_checks ---
 
 
-def run_checks(env: Environment, timeout: float = CHECK_TIMEOUT_SECONDS) -> ToolResult:
-    """Run the task's tests and report pass/fail with the (trimmed) test output."""
-    result = env.run_checks(timeout=timeout)
+def run_checks(env: Environment, timeout: float = CHECK_TIMEOUT_SECONDS, check: Check | None = None) -> ToolResult:
+    """Run the task's checks and report pass/fail with the (trimmed) output."""
+    result = check(env, timeout=timeout) if check else env.run_checks(timeout=timeout)
     output = trim_output(result.output, OUTPUT_LIMIT)
-    if result.passed:
+    if result.summary:
+        status = result.summary
+    elif result.passed:
         status = "PASSED: all checks pass."
     elif result.exit_code is None:
         status = f"FAILED: the checks timed out after {timeout:g} seconds."
@@ -221,7 +228,22 @@ _RUN_COMMAND_WHERE = {
 _RUN_COMMAND_WHERE_DEFAULT = "in the project's environment."
 
 
-def run_command_tool(env_kind: str) -> ToolDefinition:
+_RUN_COMMAND_USE = {
+    "code": (
+        "Use it to inspect the project or run Python, e.g. "
+        "'python -c \"from stats import mean; print(mean([1, 2]))\"'. To run the task's tests, "
+        "use run_checks instead."
+    ),
+    "sql": (
+        "Use it to explore the database with the read-only query runner, e.g. "
+        "'python -I /akeso/run_query.py --sql \"SELECT * FROM plans LIMIT 5\"' or "
+        "'python -I /akeso/run_query.py --file solution.sql --max-rows 20'. To check solution.sql "
+        "against the expected answer, use run_checks instead."
+    ),
+}
+
+
+def run_command_tool(env_kind: str, task_kind: str = "code") -> ToolDefinition:
     """The run_command definition, describing where commands really run for env_kind."""
     where = _RUN_COMMAND_WHERE.get(env_kind, _RUN_COMMAND_WHERE_DEFAULT)
     return ToolDefinition(
@@ -229,9 +251,7 @@ def run_command_tool(env_kind: str) -> ToolDefinition:
         description=(
             f"Run a shell command in the project root and return its exit code and output (the "
             f"end of long output is kept). Commands run {where} Commands are killed after "
-            f"{COMMAND_TIMEOUT_SECONDS} seconds. Use it to inspect the project or run Python, e.g. "
-            "'python -c \"from stats import mean; print(mean([1, 2]))\"'. To run the task's tests, "
-            "use run_checks instead."
+            f"{COMMAND_TIMEOUT_SECONDS} seconds. {_RUN_COMMAND_USE[task_kind]}"
         ),
         input_schema={
             "type": "object",
@@ -256,9 +276,23 @@ RUN_CHECKS_TOOL = ToolDefinition(
     input_schema={"type": "object", "properties": {}, "additionalProperties": False},
 )
 
-def tool_definitions(env_kind: str) -> list[ToolDefinition]:
-    """The tool definitions to send the model, with descriptions accurate for env_kind."""
-    return [READ_FILE_TOOL, APPLY_EDIT_TOOL, run_command_tool(env_kind), RUN_CHECKS_TOOL]
+SQL_RUN_CHECKS_TOOL = ToolDefinition(
+    name="run_checks",
+    description=(
+        "Run solution.sql on the database and compare its result with the expected answer. "
+        "Reports PASSED or FAILED: on failure, the SQL error or how the result differs (the "
+        "expected row and column counts, never the expected values), plus a preview of your "
+        "result. The task is solved only when this reports PASSED. Run it after each edit."
+    ),
+    input_schema=RUN_CHECKS_TOOL.input_schema,
+)
+
+
+def tool_definitions(env_kind: str, task_kind: str = "code") -> list[ToolDefinition]:
+    """The tool definitions to send the model, with descriptions accurate for where
+    commands run (env_kind) and for the kind of task."""
+    checks = SQL_RUN_CHECKS_TOOL if task_kind == "sql" else RUN_CHECKS_TOOL
+    return [READ_FILE_TOOL, APPLY_EDIT_TOOL, run_command_tool(env_kind, task_kind), checks]
 
 
 # --- executing a model's tool call ---
@@ -273,11 +307,12 @@ _REGISTRY: dict[str, tuple[ToolDefinition, Callable[..., ToolResult]]] = {
 }
 
 
-def execute_tool(env: Environment, tool_call: ToolCall) -> ToolResult:
+def execute_tool(env: Environment, tool_call: ToolCall, check: Check | None = None) -> ToolResult:
     """Run one tool call from the model. Never raises: every problem becomes an error result.
 
     Unknown tools and arguments that don't match the tool's JSON schema are rejected
-    with a message saying what was wrong, so the model can correct itself.
+    with a message saying what was wrong, so the model can correct itself. `check` is how
+    run_checks checks the task (default: the environment's test command).
     """
     entry = _REGISTRY.get(tool_call.name)
     if entry is None:
@@ -285,6 +320,8 @@ def execute_tool(env: Environment, tool_call: ToolCall) -> ToolResult:
             f"unknown tool {tool_call.name!r}. Available tools: {', '.join(sorted(_REGISTRY))}."
         )
     definition, function = entry
+    if tool_call.name == RUN_CHECKS_TOOL.name and check is not None:
+        function = partial(run_checks, check=check)
 
     problems = sorted(
         Draft202012Validator(definition.input_schema).iter_errors(tool_call.arguments),

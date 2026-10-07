@@ -25,6 +25,7 @@ class CheckResult:
     exit_code: int | None  # None when the run was killed by the timeout
     output: str  # stdout and stderr combined, in the order they were printed
     duration: float  # seconds
+    summary: str = ""  # a one-line PASSED/FAILED status, when the default pytest wording doesn't fit
 
 
 def run_checks(
