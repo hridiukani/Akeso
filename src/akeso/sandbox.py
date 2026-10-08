@@ -258,7 +258,9 @@ def cleanup_leftover_containers(max_age: timedelta | None = LEFTOVER_MAX_AGE) ->
     label_filter = [f"{key}={value}" for key, value in LABEL.items()]
     now = datetime.now(timezone.utc)
     removed = []
-    for container in client.containers.list(all=True, filters={"label": label_filter}):
+    # ignore_removed: a container removed by someone else between listing and inspecting
+    # it (another run, or its own context manager) is skipped instead of raising NotFound.
+    for container in client.containers.list(all=True, filters={"label": label_filter}, ignore_removed=True):
         if max_age is not None and now - _docker_time(container.attrs["Created"]) < max_age:
             continue  # too recent: may belong to a run that's still going
         try:

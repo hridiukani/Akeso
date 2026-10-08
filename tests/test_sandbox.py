@@ -5,6 +5,7 @@ Build the image with: python scripts/build_images.py
 
 import importlib.util
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -345,7 +346,19 @@ def test_size_limit_counts_bytes_not_characters() -> None:
 # --- leftover cleanup ---
 
 
+@pytest.fixture
+def own_cleanup_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give this test's containers an extra, unique label that its cleanup also filters on.
+
+    Cleanup with max_age=0, None or --all removes every matching container, which in a
+    parallel run (pytest -n) would include other tests' live sandboxes. The usual
+    akeso=sandbox label stays, so normal sweeps still find anything this test leaks.
+    """
+    monkeypatch.setattr(sandbox_module, "LABEL", {**sandbox_module.LABEL, "akeso-test": uuid.uuid4().hex})
+
+
 @pytest.mark.docker
+@pytest.mark.usefixtures("own_cleanup_scope")
 def test_cleanup_removes_sandbox_left_by_hard_crash(task_dir: Path) -> None:
     # A hard crash (process killed) means stop()/__exit__ never run, so simulate that
     # by starting a sandbox and simply never stopping it.
@@ -364,6 +377,7 @@ def test_cleanup_removes_sandbox_left_by_hard_crash(task_dir: Path) -> None:
 
 
 @pytest.mark.docker
+@pytest.mark.usefixtures("own_cleanup_scope")
 def test_cleanup_leaves_unlabelled_containers_alone() -> None:
     client = docker.from_env()
     # Stands in for someone's unrelated container (e.g. another project's).
@@ -418,6 +432,7 @@ def test_cleanup_script_default_keeps_fresh_container(task_dir: Path, capsys: py
 
 
 @pytest.mark.docker
+@pytest.mark.usefixtures("own_cleanup_scope")
 def test_cleanup_script_all_removes_fresh_container(task_dir: Path, capsys: pytest.CaptureFixture[str]) -> None:
     fresh = DockerSandbox()
     fresh.start(task_dir)
@@ -443,6 +458,7 @@ def test_docker_time_parsing(value: str, expected: datetime) -> None:
 
 
 @pytest.mark.docker
+@pytest.mark.usefixtures("own_cleanup_scope")
 def test_cleanup_script_max_age_zero_removes_fresh_container(task_dir: Path) -> None:
     fresh = DockerSandbox()
     fresh.start(task_dir)
@@ -477,3 +493,18 @@ def test_cleanup_script_rejects_bad_arguments(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as exit_info:
         _load_cleanup_script().main(argv)
     assert exit_info.value.code == 2
+
+
+def test_cleanup_skips_containers_removed_while_it_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Another run (or a parallel test) may remove a container between listing and inspecting it.
+    calls = []
+
+    class FakeContainers:
+        def list(self, **kwargs):
+            calls.append(kwargs)
+            return []
+
+    monkeypatch.setattr(sandbox_module, "_connect", lambda: type("Client", (), {"containers": FakeContainers()})())
+
+    assert cleanup_leftover_containers() == []
+    assert calls[0]["ignore_removed"] is True
