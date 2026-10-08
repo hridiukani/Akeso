@@ -38,3 +38,5 @@ markers = [
     "docker: needs Docker running and the akeso-code image built (quick run: -m \"not docker and not slow\")",
     "slow: starts real Python or pytest processes on this machine (LocalWorkspace, one-shot, subprocess runs)",
 ]
+# Keep the temporary folders of failed tests (only), so a flaky failure can be inspected afterwards.
+tmp_path_retention_policy = "failed"
