@@ -1,0 +1,16 @@
+id: c006_shipping_weight
+kind: code
+description: >
+  The catalog stores weights in grams, but orders.total_weight_kg returns grams while
+  claiming kilograms, so shipping prices every order as far too heavy. report.weight_label
+  divides by 1000 to compensate, so its test passes. Fixing only total_weight_kg breaks
+  weight_label; the real fix converts once, in total_weight_kg, and removes the extra
+  division in report.py.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: hard
+tags: [units, multi-file, compensating-bug, misleading-error]
+# Overfitting: hidden orders use other products, quantities and band edges, so
+# special-casing the visible orders leaves other weights 1000 times too large.
