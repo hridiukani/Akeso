@@ -1,0 +1,15 @@
+id: c007_search_keywords
+kind: code
+description: >
+  keywords() extends the list returned by the lru_cache'd stop_words() in place with
+  the caller's extra stop words, so they leak into every later call. The failing test
+  (a word missing from a simple sentence) looks like a tokenising bug, and it only fails
+  after another test file has run; run on its own, it passes.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: hard
+tags: [shared-mutable-state, cache, test-order-dependent, misleading-error]
+# Overfitting: hidden tests use other extra words, languages and call orders, so
+# undoing only the visible words (or special-casing "cat") still leaks.
