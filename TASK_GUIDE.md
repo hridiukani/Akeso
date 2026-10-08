@@ -75,18 +75,38 @@ which other input would expose it?" If the honest answer is "none", either accep
   tamper rules as an agent, and `akeso validate` fails if it would count as tampering.
 - Keep it to what a careful engineer would change; don't refactor around the bug.
 
-## 6. SQL tasks (kind: sql, planned)
+## 6. SQL tasks (kind: sql)
 
-The same principles apply, with a query instead of code:
+The same principles apply, with a query instead of code. Layout:
 
-- The bug is a realistic query mistake: a wrong join, a missing `GROUP BY` column, `<`
-  instead of `<=` in a date range, a `NULL` handled with `=` instead of `IS NULL`.
-- The README describes the question the query answers and the tables, not the mistake.
-- The judge is the result of a gold (reference) query on the same data, never the
-  model's opinion.
-- Hidden checks run the query against different data. Choose data and bugs so that a
-  query hard-coded to the visible data's results (or filtered on its specific ids or
-  dates) gives different results on the hidden data.
+```
+tasks/sql/<id>/
+    task.yaml               id, kind: sql, description, editable_paths: [solution.sql], split, tags,
+                            and a sql: block (question, as_of, dataset, seed, hidden_seed, order_matters)
+    README.md               the question's exact definitions (the agent sees this)
+    solution.sql            the broken query (the only editable file)
+    solution/solution.sql   the gold query (never copied in)
+tasks/datasets/<name>/      shared by many tasks: schema.sql and generate.py (populate(conn, seed))
+```
+
+- The bug is a realistic query mistake: a join that repeats rows, a missing `GROUP BY`
+  column, a date range that ends a day early, `= NULL` instead of `IS NULL`, `WHERE`
+  instead of `HAVING`.
+- The README defines every term the question uses (what counts as revenue, which days a
+  range includes, what each output column is) and never hints at the mistake.
+- `as_of` is a fixed date. Questions about "today" use it; nothing may depend on when a
+  run happens.
+- The judge is the gold query's result, compared by position (column names don't
+  matter), as a multiset unless `order_matters`, with floats rounded to `float_precision`.
+  Set `order_matters: true` only when the question asks for an order.
+- The hidden database (from `hidden_seed`) must give the gold query a different result
+  than the visible one; `akeso validate` checks this. A query hardcoded to the visible
+  results, or filtered on the visible data's particular ids or dates, then fails there.
+- Pick the visible seed so the bug actually changes the result (validate checks the
+  broken query fails), ideally on rows a careless fix would still get wrong (s002's
+  June 30 has payments at exactly 00:00:00 and 23:59:59).
+- The gold query must read the tables (no literal answers): it's checked by the same
+  hardcoding rules as an agent's query.
 
 ## 7. Checklist before adding a task to a suite
 
@@ -98,4 +118,5 @@ The same principles apply, with a query instead of code:
 - [ ] The solution changes only editable files and contains nothing that counts as tampering.
 - [ ] No module names that shadow Python's standard library (c005 uses `dates.py`, not `calendar.py`).
 - [ ] No symlinks; visible and hidden test file names don't collide.
-- [ ] `akeso validate` passes: the broken version fails, the solution passes visible and hidden tests.
+- [ ] `akeso validate` passes: the broken version fails, the solution passes visible and hidden tests
+      (SQL: the gold query passes on both databases, which give it different results).
