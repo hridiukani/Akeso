@@ -1,0 +1,19 @@
+id: r002_more_itertools_numeric_range
+kind: code
+description: >
+  reversed() on an empty numeric_range raises IndexError instead of giving an empty
+  iterator: __reversed__ asks for the last element without checking that there is one.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: easy
+source: real
+upstream:
+  repo: https://github.com/more-itertools/more-itertools
+  commit: edb3346f835ca917efbfda5e2d6664ab952da369
+  license: MIT
+tags: [empty-input, edge-case, sequence-protocol]
+# Task = the numeric_range class from more.py at the commit's parent (an excerpt, with only the
+# imports it uses); solution = the class after the fix. Hidden tests: upstream's NumericRangeTests
+# at the fix commit (ints, floats, Decimal, Fraction, datetime, negative steps, pickling).
