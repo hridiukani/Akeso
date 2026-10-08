@@ -240,6 +240,7 @@ kind: code
 description: A test task.
 editable_paths: [src/]
 split: dev
+difficulty: easy
 """
 
 
@@ -249,6 +250,7 @@ kind: sql
 description: A test SQL task.
 editable_paths: [solution.sql]
 split: dev
+difficulty: easy
 sql:
   question: {question}
   as_of: 2026-06-30

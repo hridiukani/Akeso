@@ -5,4 +5,5 @@ editable_paths: [src/]
 hidden_tests_dir: hidden_tests
 solution_dir: solution
 split: dev
+difficulty: easy
 tags: [string-formatting, arithmetic, single-file]

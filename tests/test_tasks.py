@@ -14,6 +14,7 @@ id: t001_demo
 kind: code
 description: A demo task.
 split: dev
+difficulty: easy
 """
 
 
@@ -48,6 +49,7 @@ kind: sql
 description: A demo SQL task.
 editable_paths: [solution.sql]
 split: dev
+difficulty: medium
 sql:
   question: Total revenue by plan.
   as_of: 2026-06-30
@@ -177,3 +179,35 @@ def test_find_task(tmp_path: Path) -> None:
     assert find_task("t001_demo", tasks_root=tmp_path).id == "t001_demo"
     with pytest.raises(TaskError, match="No task with id 'nope'"):
         find_task("nope", tasks_root=tmp_path)
+
+
+UPSTREAM = "upstream:\n  repo: https://github.com/example/lib\n  commit: 0123abcd\n  license: MIT\n"
+
+
+def test_difficulty_and_source(tmp_path: Path) -> None:
+    task = load_task(make_task(tmp_path, VALID))
+
+    assert task.spec.difficulty == "easy" and task.spec.source == "written" and task.spec.upstream is None
+
+
+def test_real_bug_task_records_its_upstream(tmp_path: Path) -> None:
+    task = load_task(make_task(tmp_path, VALID + "source: real\n" + UPSTREAM))
+
+    assert task.spec.source == "real"
+    assert (task.spec.upstream.repo, task.spec.upstream.commit, task.spec.upstream.license) == (
+        "https://github.com/example/lib", "0123abcd", "MIT")
+
+
+@pytest.mark.parametrize(("extra", "message"), [
+    ("source: real\n", "needs an 'upstream' block"),
+    (UPSTREAM, "'upstream' is only for source: real"),
+    ("source: real\n" + UPSTREAM.replace("0123abcd", "main"), "upstream.commit"),
+])
+def test_invalid_source(tmp_path: Path, extra: str, message: str) -> None:
+    with pytest.raises(TaskError, match=re.escape(message)):
+        load_task(make_task(tmp_path, VALID + extra))
+
+
+def test_difficulty_is_required(tmp_path: Path) -> None:
+    with pytest.raises(TaskError, match="difficulty: Field required"):
+        load_task(make_task(tmp_path, VALID.replace("difficulty: easy\n", "")))

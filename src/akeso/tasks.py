@@ -64,6 +64,16 @@ class SqlSpec(BaseModel):
         return self
 
 
+class Upstream(BaseModel):
+    """Where a real-bug task came from: the project, the fix commit and its license."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo: str = Field(pattern=r"^https://")  # e.g. https://github.com/owner/project
+    commit: str = Field(pattern=r"^[0-9a-f]{7,40}$")  # the fix commit; the task is the code just before it
+    license: str = Field(min_length=1)  # e.g. MIT; the notice is kept in the task's files
+
+
 class TaskSpec(BaseModel):
     """The contents of one task.yaml, validated."""
 
@@ -79,7 +89,10 @@ class TaskSpec(BaseModel):
     hidden_tests_dir: str = "hidden_tests"
     solution_dir: str = "solution"
     split: Literal["dev", "heldout"]
-    tags: list[str] = Field(default_factory=list)
+    difficulty: Literal["easy", "medium", "hard"]
+    source: Literal["written", "real"] = "written"  # real: extracted from a real bug-fix commit
+    upstream: Upstream | None = None  # required for source: real
+    tags: list[str] = Field(default_factory=list)  # bug types, e.g. [off-by-one, single-file]
     sql: SqlSpec | None = None  # required for kind: sql, not allowed for kind: code
 
     @field_validator("check_command")
@@ -117,6 +130,14 @@ class TaskSpec(BaseModel):
         for path in self.editable_paths:
             if PurePosixPath(path).parts[0] in protected:
                 raise ValueError(f"editable path {path!r} overlaps tests, hidden tests or the solution")
+        return self
+
+    @model_validator(mode="after")
+    def _upstream_only_for_real_bugs(self) -> TaskSpec:
+        if self.source == "real" and self.upstream is None:
+            raise ValueError("a real-bug task needs an 'upstream' block (repo, commit, license)")
+        if self.source == "written" and self.upstream is not None:
+            raise ValueError("'upstream' is only for source: real")
         return self
 
     @model_validator(mode="after")

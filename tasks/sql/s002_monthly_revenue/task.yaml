@@ -6,6 +6,7 @@ description: >
   after '2026-06-30' and is left out: the range ends a day early.
 editable_paths: [solution.sql]
 split: dev
+difficulty: easy
 tags: [date-range, off-by-one, boundary, ordering]
 sql:
   question: Successful payments and revenue per month for Q2 2026 (April to June), in month order.

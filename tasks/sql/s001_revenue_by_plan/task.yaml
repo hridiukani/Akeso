@@ -6,6 +6,7 @@ description: >
   every plan they were ever on.
 editable_paths: [solution.sql]
 split: dev
+difficulty: medium
 tags: [join, double-counting, aggregation]
 sql:
   question: Total revenue by plan for the 90 days ending 2026-06-30.

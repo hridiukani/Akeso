@@ -8,7 +8,9 @@ a task fair and useful. Every task must pass `akeso validate` before it joins a 
 
 ```
 tasks/<kind>/<id>/
-    task.yaml        id, kind, description, check_command, editable_paths, split, tags
+    task.yaml        id, kind, description, check_command, editable_paths, split, difficulty
+                     (easy/medium/hard), source (written/real; real tasks add upstream: repo,
+                     commit, license), tags (bug types)
     README.md        the intended behaviour (the agent sees this)
     pytest.ini       pythonpath = src, testpaths = tests
     src/             the broken code (the editable path)
