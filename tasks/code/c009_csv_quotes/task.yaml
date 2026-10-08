@@ -1,0 +1,14 @@
+id: c009_csv_quotes
+kind: code
+description: >
+  split_row toggles quoting on every double quote, so an escaped quote ("") inside a
+  quoted field is dropped instead of becoming one quote character. Replacing '""' with
+  '"' on the whole line first breaks empty quoted fields (a,"",b), which currently pass.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: medium
+tags: [parsing, state-machine, escaping, regression-guard]
+# Overfitting: hidden rows put escaped quotes at the start and end of fields, in
+# fields made only of quotes, and with other delimiters.
