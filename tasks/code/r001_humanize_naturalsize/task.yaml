@@ -1,0 +1,20 @@
+id: r001_humanize_naturalsize
+kind: code
+description: >
+  naturalsize() picks the unit (kB, MB, ...) from the unrounded size, then rounds the
+  number, so 999999 bytes reads "1000.0 kB" instead of "1.0 MB" (same for binary and
+  GNU styles). The upstream fix steps up one unit when rounding reaches the base.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: medium
+source: real
+upstream:
+  repo: https://github.com/python-humanize/humanize
+  commit: 823ad6096e1e5ba82ea876ce761fc2efebd76157
+  license: MIT
+tags: [rounding, unit-boundary, formatting]
+# Task = src/humanize at the commit's parent; solution = the fix. __init__.py is reduced to the
+# one function this task needs (upstream's imports every module). Hidden tests: upstream's
+# tests/test_filesize.py at the fix commit (other inputs, negative sizes, all three styles).
