@@ -1,7 +1,10 @@
 # Quick end-to-end check: small tasks covering single-file, boundary, cross-file,
-# formatting and regression-guard bugs.
+# formatting and regression-guard bugs, plus two SQL tasks (a double-counting join and
+# an off-by-one date range).
 - c001_mean
 - c002_shipping
 - c003_discount
 - c004_duration
 - c005_calendar
+- s001_revenue_by_plan
+- s002_monthly_revenue
