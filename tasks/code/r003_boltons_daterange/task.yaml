@@ -1,0 +1,20 @@
+id: r003_boltons_daterange
+kind: code
+description: >
+  daterange() with a month or year step does its month arithmetic on 1-based months with
+  divmod(month + step, 12), so stepping into December lands in the wrong year, and steps
+  of 12 or more months go wrong. Upstream issue #319. The fix folds years into months and
+  does the arithmetic on 0-based months.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: hard
+source: real
+upstream:
+  repo: https://github.com/mahmoud/boltons
+  commit: 8ba3a7fa0d99b73f7f43c1aed82c571b941eecea
+  license: BSD-3-Clause
+tags: [date-arithmetic, off-by-one, modular-arithmetic]
+# Task = boltons/timeutils.py at the commit's parent; solution = after the fix. Hidden tests:
+# upstream's tests/test_timeutils.py at the fix commit, which includes the existing daterange tests.
