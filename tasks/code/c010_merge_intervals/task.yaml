@@ -1,0 +1,13 @@
+id: c010_merge_intervals
+kind: code
+description: >
+  merge() has two bugs: it assumes the input is already sorted, and it only merges
+  intervals that overlap, not ones that touch ((60, 90) and (90, 120) should become
+  (60, 120)). busy_minutes, built on merge, is wrong for unsorted input as a result.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: medium
+tags: [algorithm, boundary, unsorted-input, two-bugs]
+# Overfitting: hidden tests use other unsorted, nested, duplicate and touching inputs.
