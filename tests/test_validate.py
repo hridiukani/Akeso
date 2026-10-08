@@ -186,3 +186,17 @@ def test_symlink_detection_without_real_links(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(Path, "is_symlink", lambda self: self.name == "test_stats.py" or real(self))
 
     assert symlinks(task.root) == ["tests/test_stats.py"]
+
+
+def test_sql_gold_query_the_parser_cannot_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from akeso import grading
+    from akeso.sql_tamper import UnparseableSql
+
+    def cannot_parse(sql: str):
+        raise UnparseableSql("unreadable")
+
+    monkeypatch.setattr(grading, "hardcoding_problems", cannot_parse)
+
+    result = validate_task(sql_task(tmp_path), FakeFactory())
+
+    assert result.problems == ["the gold query can't be checked for hardcoding: solution.sql: unreadable"]

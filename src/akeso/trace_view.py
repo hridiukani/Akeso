@@ -47,6 +47,8 @@ def story(events: list[dict[str, Any]], full: bool = False) -> str:
                 lines.append(f"  Not carried into grading (outside the editable paths): {', '.join(event['ignored'])}")
             for finding in event["tampering"]:
                 lines.append(f"  !! TAMPERING: {finding}")
+            for warning in event.get("warnings", []):
+                lines.append(f"  ! Warning: {warning}")
         elif kind == "grading":
             if event.get("task_kind") == "sql":
                 visible = "visible database matched" if event["visible_passed"] else "visible database DIDN'T MATCH"

@@ -129,6 +129,8 @@ def _validate_sql(task: Task, make_environment: Callable[[], Environment], probl
     solution = changes_from_files(task, files)
     for finding in solution.findings:
         problems.append(f"the gold query itself would count as tampering: {finding}")
+    for warning in solution.warnings:  # an agent gets the benefit of the doubt; a task author can rewrite it
+        problems.append(f"the gold query can't be checked for hardcoding: {warning}")
     try:
         broken = grade(task, ChangeSet(), make_environment)
         fixed = grade(task, ChangeSet(written=solution.written), make_environment)

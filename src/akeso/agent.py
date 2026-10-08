@@ -65,6 +65,7 @@ class AgentResult:
     visible_passed: bool = False
     hidden_passed: bool | None = None  # None when the task has no hidden tests
     tampering: list[str] = field(default_factory=list)  # what was detected, if anything
+    warnings: list[str] = field(default_factory=list)  # checks that couldn't run (not tampering)
     rate_limit_retries: int = 0  # times the provider had to wait after HTTP 429 during this task
     detail: str = ""  # human-readable explanation of the outcome
     run_id: str = ""
@@ -139,6 +140,7 @@ def run_agent(
                 visible_passed=graded.visible_passed if graded else False,
                 hidden_passed=graded.hidden_passed if graded else None,
                 tampering=[str(finding) for finding in graded.tampering] if graded else [],
+                warnings=list(graded.warnings) if graded else [],
                 detail=detail, run_id=run_id, trace_path=path.as_posix(),
             )
             trace.event("result", **asdict(outcome))
@@ -231,7 +233,7 @@ def run_agent(
             changes = collect_changes(env, task)
             trace.event(
                 "changes", written=sorted(changes.written), deleted=changes.deleted,
-                ignored=changes.ignored, tampering=[str(f) for f in changes.findings],
+                ignored=changes.ignored, tampering=[str(f) for f in changes.findings], warnings=changes.warnings,
             )
         # The agent's environment is gone now; grade in a brand-new one.
         graded = grade(task, changes, environment_factory)

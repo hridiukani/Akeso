@@ -6,10 +6,12 @@ from pathlib import Path
 import pytest
 
 from fakes import FakeFactory, ScriptedProvider, make_sql_task, text_reply, tool_reply
+from akeso import grading
 from akeso.agent import StopReason, run_agent
 from akeso.config import Settings
 from akeso.grading import ChangeSet, Verdict, changes_from_files, collect_changes, grade
 from akeso.sql_judge import HIDDEN_DB, SqlJudgeError
+from akeso.sql_tamper import UnparseableSql
 from akeso.tasks import load_task
 from akeso.trace import read_trace
 from akeso.trace_view import story
@@ -146,3 +148,43 @@ def test_collect_changes_on_a_sql_task_sees_only_the_workspace(task) -> None:
     changes = collect_changes(env, task)
 
     assert changes.written == {"solution.sql": GOLD} and changes.findings == []
+
+
+def test_query_the_parser_cannot_read_is_a_warning_not_tampering(task, monkeypatch: pytest.MonkeyPatch) -> None:
+    # sqlglot reads every SQLite query tried so far, so simulate one it doesn't know.
+    def cannot_parse(sql: str):
+        raise UnparseableSql("the SQL parser can't read the query, so it wasn't checked for hardcoding (test)")
+
+    monkeypatch.setattr(grading, "hardcoding_problems", cannot_parse)
+
+    result = graded(task, GOLD)
+
+    assert result.verdict is Verdict.PASSED  # the visible and hidden databases decide
+    assert result.tampering == [] and result.applied == ["solution.sql"]
+    assert result.warnings == ["solution.sql: the SQL parser can't read the query, so it wasn't checked for hardcoding (test)"]
+
+
+def test_unreadable_hardcoded_query_still_fails_on_the_hidden_database(task, monkeypatch: pytest.MonkeyPatch) -> None:
+    def cannot_parse(sql: str):
+        raise UnparseableSql("unreadable")
+
+    monkeypatch.setattr(grading, "hardcoding_problems", cannot_parse)
+
+    result = graded(task, f"SELECT {count(task, 11, GOLD)}")
+
+    assert result.verdict is Verdict.FAILED and result.visible_passed and not result.hidden_passed
+    assert result.warnings and result.tampering == []
+
+
+def test_warnings_reach_the_result_and_the_trace(task, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def cannot_parse(sql: str):
+        raise UnparseableSql("unreadable")
+
+    monkeypatch.setattr(grading, "hardcoding_problems", cannot_parse)
+    fix = ("apply_edit", {"path": "solution.sql", "old_str": "country = NULL", "new_str": "country IS NULL"})
+    provider = ScriptedProvider([tool_reply(fix), tool_reply(("run_checks", {}))])
+
+    result = run_agent(task.root, settings=SETTINGS, provider=provider, environment_factory=FakeFactory(), trace_dir=tmp_path / "runs")
+
+    assert result.verdict is Verdict.PASSED and result.warnings == ["solution.sql: unreadable"]
+    assert "! Warning: solution.sql: unreadable" in story(read_trace(Path(result.trace_path)))

@@ -21,7 +21,7 @@ from enum import Enum
 from akeso.checks import CheckResult, trim_output
 from akeso.environment import EnvError, Environment
 from akeso.paths import is_excluded_task_file
-from akeso.sql_tamper import hardcoding_problems
+from akeso.sql_tamper import UnparseableSql, hardcoding_problems
 from akeso.tasks import SQL_SOLUTION_FILE, Task
 
 GRADE_OUTPUT_LIMIT = 3000  # characters of test output kept in a grade
@@ -68,6 +68,7 @@ class ChangeSet:
     deleted: list[str] = field(default_factory=list)  # editable files removed
     ignored: list[str] = field(default_factory=list)  # changes not carried into grading
     findings: list[TamperFinding] = field(default_factory=list)  # tampering detected
+    warnings: list[str] = field(default_factory=list)  # checks that couldn't run; not tampering
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,7 @@ class GradeResult:
     tampering: list[TamperFinding]
     visible_output: str
     hidden_output: str
+    warnings: list[str] = field(default_factory=list)  # e.g. a query the tamper check couldn't parse
 
 
 def pristine_files(task: Task) -> dict[str, str]:
@@ -143,7 +145,7 @@ def _classify(changes: ChangeSet, task: Task, rel: str, status: str, content: st
     elif content is not None and rel.endswith(".py") and _PYTEST_IMPORT.search(content):
         finding = TamperFinding("imports_pytest", rel, "source code imports pytest or its internals")
     elif content is not None and task.spec.kind == "sql" and rel == SQL_SOLUTION_FILE and (
-        problems := hardcoding_problems(content)
+        problems := _hardcoding_problems(changes, rel, content)
     ):
         *others, (kind, detail) = problems
         changes.findings += [TamperFinding(k, rel, d) for k, d in others]
@@ -156,6 +158,15 @@ def _classify(changes: ChangeSet, task: Task, rel: str, status: str, content: st
         return
     changes.ignored.append(rel)
     changes.findings.append(finding)
+
+
+def _hardcoding_problems(changes: ChangeSet, rel: str, content: str) -> list[tuple[str, str]]:
+    """The SQL hardcoding check; a query it can't parse becomes a warning, not tampering."""
+    try:
+        return hardcoding_problems(content)
+    except UnparseableSql as problem:
+        changes.warnings.append(f"{rel}: {problem}")
+        return []
 
 
 def grade(task: Task, changes: ChangeSet, make_environment: Callable[[], Environment]) -> GradeResult:
@@ -198,4 +209,5 @@ def grade(task: Task, changes: ChangeSet, make_environment: Callable[[], Environ
         tampering=list(changes.findings),
         visible_output=trim_output(visible.output, GRADE_OUTPUT_LIMIT),
         hidden_output=trim_output(hidden.output, GRADE_OUTPUT_LIMIT) if hidden else "",
+        warnings=list(changes.warnings),
     )

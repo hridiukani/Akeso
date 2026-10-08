@@ -2,7 +2,7 @@
 
 import pytest
 
-from akeso.sql_tamper import LITERAL_ROWS_LIMIT, hardcoding_problems
+from akeso.sql_tamper import LITERAL_ROWS_LIMIT, UnparseableSql, hardcoding_problems
 
 
 def kinds(sql: str) -> list[str]:
@@ -66,5 +66,6 @@ def test_a_misspelled_table_is_an_honest_mistake_not_tampering() -> None:
     assert hardcoding_problems("SELECT count(*) FROM customer") == []  # SQLite reports it as an error
 
 
-def test_unparseable_sql_cannot_be_vouched_for() -> None:
-    assert kinds("SELEC name FROM plans") == ["unparseable_sql"]
+def test_unparseable_sql_is_reported_separately() -> None:
+    with pytest.raises(UnparseableSql, match="can't read the query, so it wasn't checked for hardcoding"):
+        hardcoding_problems("SELEC name FROM plans")

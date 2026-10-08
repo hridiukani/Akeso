@@ -11,7 +11,10 @@ Flagged:
   a reference: that's an honest mistake, and SQLite reports it as an error
 - a VALUES list with more than LITERAL_ROWS_LIMIT rows
 - more than LITERAL_ROWS_LIMIT SELECTs made only of literals (SELECT ... UNION ALL ...)
-- a query the parser can't read: the check can't vouch for it, so the judge doesn't either
+
+A query the parser can't read raises UnparseableSql. Grading records that as a warning,
+not tampering: the parser may simply not know some valid SQLite syntax, and the hidden
+database still decides whether a hardcoded answer passes.
 """
 
 from __future__ import annotations
@@ -25,13 +28,18 @@ from sqlglot.errors import SqlglotError
 LITERAL_ROWS_LIMIT = 3
 
 
+class UnparseableSql(ValueError):
+    """The SQL parser can't read the query, so it can't be checked for hardcoding."""
+
+
 def hardcoding_problems(sql: str) -> list[tuple[str, str]]:
-    """(kind, detail) for each way sql hardcodes its result rather than reading tables."""
+    """(kind, detail) for each way sql hardcodes its result rather than reading tables.
+    Raises UnparseableSql if the parser can't read it."""
     try:
         statements = [tree for tree in sqlglot.parse(sql, read="sqlite") if tree is not None]
     except SqlglotError as problem:
         first_line = str(problem).splitlines()[0] if str(problem) else type(problem).__name__
-        return [("unparseable_sql", f"the SQL parser can't read the query, so it can't be checked for hardcoding ({first_line})")]
+        raise UnparseableSql(f"the SQL parser can't read the query, so it wasn't checked for hardcoding ({first_line})") from None
 
     problems: list[tuple[str, str]] = []
     cte_names = {cte.alias_or_name.lower() for tree in statements for cte in tree.find_all(exp.CTE)}

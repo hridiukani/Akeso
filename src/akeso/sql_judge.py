@@ -218,6 +218,7 @@ def grade_sql(task: Task, changes: ChangeSet, make_environment: Callable[[], Env
         tampering=list(changes.findings),
         visible_output=trim_output(reports[VISIBLE_DB], GRADE_OUTPUT_LIMIT),
         hidden_output=trim_output(reports[HIDDEN_DB], GRADE_OUTPUT_LIMIT),
+        warnings=list(changes.warnings),
     )
 
 
