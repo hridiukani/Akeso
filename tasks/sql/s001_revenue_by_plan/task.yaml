@@ -1,0 +1,19 @@
+id: s001_revenue_by_plan
+kind: sql
+description: >
+  Revenue by plan joins payments to subscriptions on customer_id instead of
+  subscription_id, so customers who changed plan have their payments counted under
+  every plan they were ever on.
+editable_paths: [solution.sql]
+split: dev
+tags: [join, double-counting, aggregation]
+sql:
+  question: Total revenue by plan for the 90 days ending 2026-06-30.
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 11
+  hidden_seed: 911
+  order_matters: false
+# Overfitting: a query hardcoding the visible totals is flagged as tampering, and one
+# filtered to the visible data's plan changers gives different totals on the hidden
+# database (different customers change plan there).

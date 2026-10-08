@@ -28,8 +28,8 @@ def test_real_tasks_load() -> None:
     tasks = all_tasks()
 
     assert [t.id for t in tasks][:3] == ["c001_mean", "c002_shipping", "c003_discount"]
+    assert {t.spec.kind for t in tasks} == {"code", "sql"}
     for task in tasks:
-        assert task.spec.kind == "code"
         assert (task.root / task.spec.solution_dir).is_dir()
 
 
