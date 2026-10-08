@@ -1,0 +1,16 @@
+id: c008_invoice_rounding
+kind: code
+description: >
+  Invoice amounts are computed with binary floats and round(), so products like
+  3 x $0.075 (= 0.22499999...) round down instead of up. The tempting fix,
+  Decimal(float_amount) or Decimal(str(float_amount)), still fails: the amount is already
+  wrong as a float. Only computing in Decimal from the price strings, rounding half up at
+  each line and at the tax, gives the right cents everywhere.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: hard
+tags: [floating-point, money, rounding, tempting-wrong-fix]
+# Overfitting: hidden invoices hit other half-cent boundaries, at line level and in the
+# tax; special-casing the visible invoices or patching round() for them fails there.
