@@ -1,0 +1,21 @@
+# LF line endings for every text file, in the repository and in working copies on every
+# OS (this overrides core.autocrlf). Files then hash the same on every machine, and the
+# ones that end up inside Linux containers (scripts, SQL, the query runner) never carry
+# Windows line endings.
+* text=auto eol=lf
+
+*.py text eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.Dockerfile text eol=lf
+Dockerfile text eol=lf
+
+# Never touch binary files.
+*.db binary
+*.sqlite binary
+*.png binary
