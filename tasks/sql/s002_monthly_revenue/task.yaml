@@ -1,0 +1,19 @@
+id: s002_monthly_revenue
+kind: sql
+description: >
+  Monthly revenue for Q2 2026 filters paid_at with BETWEEN '2026-04-01' AND '2026-06-30'.
+  paid_at is a timestamp, so every payment made on 2026-06-30 (even at 00:00:00) sorts
+  after '2026-06-30' and is left out: the range ends a day early.
+editable_paths: [solution.sql]
+split: dev
+tags: [date-range, off-by-one, boundary, ordering]
+sql:
+  question: Successful payments and revenue per month for Q2 2026 (April to June), in month order.
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 12
+  hidden_seed: 912
+  order_matters: true
+# Only the June row is wrong, so this also checks that a fix keeps April and May right.
+# Overfitting: adding the visible June 30 totals by hand is caught by the hidden database
+# (different payments on that day) and literal rows are flagged as tampering.
