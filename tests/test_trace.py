@@ -134,6 +134,7 @@ def test_story_tells_what_happened(task_dir: Path, tmp_path: Path) -> None:
     assert "RESULT: PASSED  (verdict: passed, stop reason: passed)" in text
 
 
+@pytest.mark.slow
 def test_trace_command_prints_utf8_even_when_piped(tmp_path: Path) -> None:
     import subprocess
     import sys

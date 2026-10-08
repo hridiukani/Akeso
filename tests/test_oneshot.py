@@ -195,6 +195,7 @@ def spy() -> SpyWorkspace:
     return SpyWorkspace()
 
 
+@pytest.mark.slow
 def test_valid_fix_passes(task: Path, spy: SpyWorkspace) -> None:
     original = read_all(task)
     provider = FakeProvider(reply("src/stats.py", FIXED_CODE))
@@ -212,6 +213,7 @@ def test_valid_fix_passes(task: Path, spy: SpyWorkspace) -> None:
     assert read_all(task) == original  # ...but never to the original task
 
 
+@pytest.mark.slow
 def test_wrong_fix_still_fails(task: Path, spy: SpyWorkspace) -> None:
     provider = FakeProvider(reply("src/stats.py", "def mean(numbers):\n    return 0\n"))
 
@@ -238,6 +240,7 @@ def assert_failed_cleanly(result: oneshot.OneshotResult, task: Path, spy: SpyWor
         reply("src/stats.py", FIXED_CODE) * 2,  # two blocks
     ],
 )
+@pytest.mark.slow
 def test_malformed_reply_fails_cleanly(
     task: Path, spy: SpyWorkspace, reply_text: str
 ) -> None:
@@ -259,6 +262,7 @@ def test_malformed_reply_fails_cleanly(
         "src/../../outside.py",  # starts in src/ but climbs out
     ],
 )
+@pytest.mark.slow
 def test_unsafe_path_fails_cleanly(task: Path, spy: SpyWorkspace, path: str) -> None:
     result = run_oneshot(
         task, confirm=False, settings=SETTINGS, provider=FakeProvider(reply(path, FIXED_CODE)),
@@ -273,6 +277,7 @@ def test_unsafe_path_fails_cleanly(task: Path, spy: SpyWorkspace, path: str) -> 
     assert not (task.parent / "outside.py").exists()
 
 
+@pytest.mark.slow
 def test_rejected_confirmation_writes_nothing(
     task: Path, spy: SpyWorkspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -297,6 +302,7 @@ def test_make_environment_by_mode() -> None:
         oneshot.make_environment("cloud")  # type: ignore[arg-type]
 
 
+@pytest.mark.slow
 def test_docker_is_the_default_mode(monkeypatch: pytest.MonkeyPatch, task: Path) -> None:
     chosen: list[str] = []
 
@@ -311,6 +317,7 @@ def test_docker_is_the_default_mode(monkeypatch: pytest.MonkeyPatch, task: Path)
     assert chosen == ["docker"]
 
 
+@pytest.mark.slow
 def test_local_run_asks_for_confirmation_by_default(
     task: Path, spy: SpyWorkspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:

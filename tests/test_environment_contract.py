@@ -16,7 +16,7 @@ from akeso.sandbox import DockerSandbox
 from akeso.workspace import LocalWorkspace
 
 IMPLEMENTATIONS = [
-    pytest.param("local", id="local"),
+    pytest.param("local", id="local", marks=pytest.mark.slow),
     pytest.param("docker", id="docker", marks=pytest.mark.docker),
 ]
 

@@ -37,6 +37,7 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@pytest.mark.slow
 def test_select_prints_columns_and_rows(db: Path) -> None:
     code, out = run("--db", str(db), "--sql", "SELECT plan_id, name AS plan FROM plans ORDER BY plan_id LIMIT 2")
 
@@ -45,6 +46,7 @@ def test_select_prints_columns_and_rows(db: Path) -> None:
                    "rows": [[1, "Starter"], [2, "Pro"]]}
 
 
+@pytest.mark.slow
 def test_reads_the_query_from_a_file(db: Path, tmp_path: Path) -> None:
     (tmp_path / "solution.sql").write_text("-- how many plans?\nSELECT count(*) AS n FROM plans;\n")
 
@@ -53,6 +55,7 @@ def test_reads_the_query_from_a_file(db: Path, tmp_path: Path) -> None:
     assert code == 0 and out["rows"] == [[6]]
 
 
+@pytest.mark.slow
 def test_with_and_recursive_queries_work(db: Path) -> None:
     code, out = run("--db", str(db), "--sql",
                     "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3) SELECT i FROM n")
@@ -60,6 +63,7 @@ def test_with_and_recursive_queries_work(db: Path) -> None:
     assert code == 0 and out["rows"] == [[1], [2], [3]]
 
 
+@pytest.mark.slow
 def test_nulls_floats_and_max_rows(db: Path) -> None:
     code, out = run("--db", str(db), "--max-rows", "1", "--sql", "SELECT NULL, 1.5, x'00ff' UNION ALL SELECT 1, 2, 3")
 
@@ -102,6 +106,7 @@ def test_statements_that_change_anything_are_blocked(db: Path, tmp_path: Path, m
     assert list(tmp_path.iterdir()) == []  # no copy or attached file was created
 
 
+@pytest.mark.slow
 def test_only_one_statement(db: Path) -> None:
     before = digest(db)
 
@@ -124,6 +129,7 @@ def test_errors_are_reported_clearly(db: Path, sql: str, message: str) -> None:
     assert code == 1 and message in out["error"]
 
 
+@pytest.mark.slow
 def test_missing_database_is_never_created(tmp_path: Path) -> None:
     code, out = run("--db", str(tmp_path / "nope.db"), "--sql", "SELECT 1")
 
@@ -131,6 +137,7 @@ def test_missing_database_is_never_created(tmp_path: Path) -> None:
     assert not (tmp_path / "nope.db").exists()
 
 
+@pytest.mark.slow
 def test_missing_query_file(db: Path, tmp_path: Path) -> None:
     code, out = run("--db", str(db), "--file", "solution.sql", cwd=tmp_path)
 

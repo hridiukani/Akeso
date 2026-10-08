@@ -27,6 +27,7 @@ def check(folder: Path, timeout: float = 60) -> CheckResult:
         return run_checks(env, timeout=timeout)
 
 
+@pytest.mark.slow
 def test_passing_project(tmp_path: Path) -> None:
     project = write_project(tmp_path, "def test_ok():\n    assert 1 + 1 == 2\n")
 
@@ -38,6 +39,7 @@ def test_passing_project(tmp_path: Path) -> None:
     assert result.duration > 0
 
 
+@pytest.mark.slow
 def test_failing_project(tmp_path: Path) -> None:
     project = write_project(tmp_path, "def test_broken():\n    total = 1 + 1\n    assert total == 3\n")
 
@@ -49,6 +51,7 @@ def test_failing_project(tmp_path: Path) -> None:
     assert "assert 2 == 3" in result.output  # failure details are captured for the model
 
 
+@pytest.mark.slow
 def test_timeout_counts_as_failure(tmp_path: Path) -> None:
     project = write_project(tmp_path, "import time\ndef test_slow():\n    time.sleep(30)\n")
 
@@ -60,6 +63,7 @@ def test_timeout_counts_as_failure(tmp_path: Path) -> None:
     assert result.duration < 15  # killed early, not left to run its full 30 seconds
 
 
+@pytest.mark.slow
 def test_parent_env_var_is_not_visible_to_task_code(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

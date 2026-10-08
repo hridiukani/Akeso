@@ -12,6 +12,7 @@ dependencies = [
     "python-dotenv",
     "openai",
     "pytest",
+    "pytest-xdist",  # runs the test suite in parallel (-n)
     "docker",
     "jsonschema",
     "pydantic>=2",
@@ -34,5 +35,6 @@ pythonpath = ["tests"]
 # A typo like @pytest.mark.dokcer becomes an error instead of a silently unmarked test.
 addopts = "--strict-markers"
 markers = [
-    "docker: needs Docker running and the akeso-code image built (quick run: -m \"not docker\")",
+    "docker: needs Docker running and the akeso-code image built (quick run: -m \"not docker and not slow\")",
+    "slow: starts real Python or pytest processes on this machine (LocalWorkspace, one-shot, subprocess runs)",
 ]

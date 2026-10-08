@@ -29,7 +29,7 @@ def task_dir(tmp_path: Path) -> Path:
     return task
 
 
-@pytest.fixture(params=["local", pytest.param("docker", marks=pytest.mark.docker)])
+@pytest.fixture(params=[pytest.param("local", marks=pytest.mark.slow), pytest.param("docker", marks=pytest.mark.docker)])
 def env(request: pytest.FixtureRequest, task_dir: Path) -> Iterator[Environment]:
     environment: Environment = LocalWorkspace() if request.param == "local" else DockerSandbox()
     with environment:

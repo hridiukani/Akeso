@@ -35,7 +35,7 @@ def task_dir(tmp_path: Path) -> Path:
     })
 
 
-@pytest.fixture(params=["local", pytest.param("docker", marks=pytest.mark.docker)])
+@pytest.fixture(params=[pytest.param("local", marks=pytest.mark.slow), pytest.param("docker", marks=pytest.mark.docker)])
 def factory(request: pytest.FixtureRequest):
     return LocalWorkspace if request.param == "local" else DockerSandbox
 
