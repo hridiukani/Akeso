@@ -11,7 +11,13 @@ the engineering list.
   prompt and tool definitions should cut cost on longer runs.
 - **Run fingerprint in summary.json.** Record hashes of the task files, the Docker image
   digest, the prompt version and the limits, so two runs can be proven to use identical
-  settings (the Measurement rule).
+  settings (the Measurement rule). Hash file contents with line endings normalised (or
+  hash the git blobs), so the same tasks give the same fingerprint on every machine;
+  .gitattributes now keeps LF in working copies, but a fingerprint shouldn't depend on it.
+- **Record pacing waits per task and per run.** Token-aware pacing replaced the 429s (0 in
+  the Topic 7 smoke run) with up-front waits, which nothing records. Count them and their
+  seconds in each result and summary.json, so a slow run can be put down to the model or
+  to the quota.
 - **`akeso run --resume`.** Rerun only the missing or crashed tasks in an existing run
   folder, instead of starting a long suite again after a crash.
 
@@ -20,6 +26,13 @@ the engineering list.
 - **Held-out tasks.** Every task is `split: dev` so far. Official results need held-out
   tasks the prompt was never tuned on, and runs should report the dev and held-out splits
   separately.
+- **Harder SQL tasks.** s001 took 3 steps and s002 took 5 in the Topic 7 smoke run, so
+  both are easy for the development model. Candidates: `= NULL` instead of `IS NULL`,
+  `WHERE` instead of `HAVING`, an inner join that drops the plan nobody is on, a window
+  function over the wrong partition, annual revenue spread over months.
+- **Mind Groq's daily request cap.** Its headers report 1,000 requests a day (on top of
+  8,000 tokens a minute). A 30-task suite at about 4 steps a task is ~120 requests, so
+  about 8 development runs a day; plan full-suite debugging around it.
 
 ## Polish topic
 
@@ -29,9 +42,16 @@ the engineering list.
   gaps listed in LEARNING.md's Known limitations.
 - **`akeso run --task ID`, and fold the old scripts into the CLI.** `scripts/run_agent.py`,
   `scripts/cleanup_containers.py` and `scripts/build_images.py` overlap the CLI now.
-- **Speed up the Docker tests.** They take 2 to 4 minutes, and grading now starts a second
-  container per task. Run them in parallel with `pytest-xdist` (one sandbox each) and pin
-  the base image by digest.
+- **Pin the sandbox base image by digest.** `python:3.11-slim` can change underneath us;
+  pinning its digest keeps the sandbox identical between runs. (The parallel Docker tests
+  from this item are done.)
+- **Catch hardcoding in queries that read a table.** `SELECT 1234.5 FROM plans LIMIT 1`
+  passes the tamper check because it references a table, and a literal JSON string fed to
+  `json_each` does too. The hidden database makes both fail, but they aren't labelled
+  tampering. Flag results made only of literals with no aggregate, and long string literals
+  passed to table-valued functions.
+- **Update README.md for SQL tasks.** It doesn't mention SQL tasks, that they need Docker
+  (local mode refuses them), the query runner, or the sqlglot dependency.
 
 ## Experiment candidates (don't implement before the baseline is measured)
 
@@ -56,6 +76,11 @@ the engineering list.
   removing the container kills everything). Accepted while local mode is opt-in. Fix: start
   the command in its own process group (`start_new_session=True` on Unix,
   `CREATE_NEW_PROCESS_GROUP` plus a tree kill on Windows) and kill the group on timeout.
+- **Flaky local agent test.** `test_cheating_changes_never_reach_grading[local]` failed
+  once during a slow quick run (the agent's own check didn't pass after the cheat, so the
+  loop ran a fourth step), then passed on every rerun. Its trace was already deleted. Now
+  that pytest keeps failed tests' tmp folders (tmp_path_retention_policy = "failed"), look
+  at the trace next time it fails. Likely load-sensitive timing in local mode.
 
 ## Done in Topic 7 (SQL tasks)
 
@@ -66,6 +91,13 @@ the engineering list.
 - **More validator checks.** Done (step 7.7): `akeso validate` fails a task containing
   symlinks (in the task or its dataset) and a code task whose hidden test file names
   collide with visible ones.
+- **Faster quick tests, parallel Docker tests.** Done: tests that start real processes on
+  this machine are marked `slow`, so the quick run takes ~10 s instead of 2.5 min, and the
+  Docker tests run with `pytest -n 4` (~45 s instead of 2 to 2.5 min). Slow tests stay
+  serial. Running in parallel exposed (and fixed) a race in the leftover-container sweep.
+- **LF line endings everywhere.** Done: .gitattributes keeps LF for every text file.
+- **Unparseable SQL is a warning, not tampering.** Done: the hidden database decides the
+  verdict; validate still fails a gold query the parser can't read.
 
 ## Done in Topic 6 (tasks, cheat-proof grading and the run command)
 
