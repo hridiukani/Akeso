@@ -1,0 +1,20 @@
+id: s013_monthly_growth
+kind: sql
+description: >
+  Groups orders by month and uses LAG over the months that have orders, so the month the
+  store was closed (no orders) is missing, and the next month is compared with the month
+  before the gap. It needs a generated calendar of all 12 months with 0 orders for the
+  empty one, and no growth (NULL) when the previous month had 0.
+editable_paths: [solution.sql]
+split: dev
+difficulty: hard
+tags: [missing-periods, calendar-table, lag]
+sql:
+  question: Orders per month and month-over-month growth, July 2025 to June 2026, in month order.
+  as_of: 2026-06-30
+  dataset: store
+  seed: 45
+  hidden_seed: 945
+  order_matters: true
+  float_precision: 4
+# Overfitting: the closed month is a different month on the hidden database.
