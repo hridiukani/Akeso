@@ -1,0 +1,19 @@
+id: s014_order_status
+kind: sql
+description: >
+  Takes each order's current status as MAX(status), which is the alphabetically last
+  status ('shipped' beats 'delivered' and 'paid'), not the most recent one. The status
+  must come from the order's latest event up to the end of 2026-06-30.
+editable_paths: [solution.sql]
+split: dev
+difficulty: medium
+tags: [latest-per-group, wrong-ordering, as-of-date]
+sql:
+  question: How many June 2026 orders were in each status at the end of 2026-06-30?
+  as_of: 2026-06-30
+  dataset: store
+  seed: 46
+  hidden_seed: 946
+  order_matters: false
+  float_precision: 2
+# Overfitting: status histories differ on the hidden database.
