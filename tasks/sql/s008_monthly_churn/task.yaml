@@ -1,0 +1,21 @@
+id: s008_monthly_churn
+kind: sql
+description: >
+  Counts subscriptions instead of customers, so a customer who changes plan (their old
+  subscription ends and a new one starts the same day) counts as churned. It also treats
+  a subscription ending on the first of the month as active that day (>= instead of >).
+  Churn must be decided per customer: still active on the first day of next month?
+editable_paths: [solution.sql]
+split: dev
+difficulty: hard
+tags: [multi-step, customer-vs-subscription, date-boundary]
+sql:
+  question: Monthly customer churn for Q2 2026 (April, May, June), in month order.
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 23
+  hidden_seed: 923
+  order_matters: true
+  float_precision: 4
+# Overfitting: every month's numbers differ on the hidden database; literal month rows
+# would be flagged, and the months' VALUES list (3 rows) is within the honest-literal limit.
