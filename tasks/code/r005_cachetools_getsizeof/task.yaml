@@ -1,0 +1,21 @@
+id: r005_cachetools_getsizeof
+kind: code
+description: >
+  With getsizeof set, Cache.__setitem__ reserves room for the full new size of a value
+  even when the key is already cached, although the current size already includes the
+  key's old value. Growing an existing entry therefore evicts other entries that would
+  still fit (upstream issue #405). The fix reserves only the size difference.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: medium
+source: real
+upstream:
+  repo: https://github.com/tkem/cachetools
+  commit: 39b31bc9b63abe98497409945e9d382d8918c8fb
+  license: MIT
+tags: [bookkeeping, double-counting, inheritance]
+# Task = the cachetools package at the commit's parent; solution = __init__.py after the fix.
+# Hidden tests: upstream's tests/__init__.py (the shared CacheTestMixin, which holds the new
+# regression test) and the per-cache test files, so every cache type is checked.
