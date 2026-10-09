@@ -1,0 +1,19 @@
+id: s011_return_rate
+kind: sql
+description: >
+  Divides two integer sums, so SQLite does integer division and every rate is 0; and it
+  starts from order_items, so a category nobody bought from (gift cards) is missing
+  instead of appearing with a NULL rate.
+editable_paths: [solution.sql]
+split: dev
+difficulty: medium
+tags: [integer-division, outer-join, divide-by-zero]
+sql:
+  question: Return rate per category for orders placed in 2025, for every category.
+  as_of: 2026-06-30
+  dataset: store
+  seed: 43
+  hidden_seed: 943
+  order_matters: false
+  float_precision: 4
+# Overfitting: return counts differ on the hidden database.
