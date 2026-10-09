@@ -1,0 +1,19 @@
+id: s004_big_spenders
+kind: sql
+description: >
+  Filters with WHERE p.amount > 500, which keeps single payments over $500 before grouping,
+  instead of HAVING SUM(p.amount) > 500 on each customer's total. Customers with many
+  smaller payments are missed, and big payers' totals leave out their smaller payments.
+editable_paths: [solution.sql]
+split: dev
+difficulty: medium
+tags: [where-vs-having, aggregation]
+sql:
+  question: Which customers paid more than $500 in total in H1 2026?
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 14
+  hidden_seed: 914
+  order_matters: false
+  float_precision: 2
+# Overfitting: different customers cross the $500 line on the hidden database.
