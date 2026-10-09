@@ -1,0 +1,21 @@
+id: r004_humanize_fractional
+kind: code
+description: >
+  fractional() splits off the whole number, then turns the rest into a fraction with
+  limit_denominator(1000). When that rest rounds to a whole (2.9999999 -> 1/1), the
+  special case only covers exact integers, so it prints "2 1/1" (and "0/1"-style output
+  for other inputs). The upstream fix folds a whole-number fraction into the integer part.
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: medium
+source: real
+upstream:
+  repo: https://github.com/python-humanize/humanize
+  commit: 08cf2c3026cfd7c553e397e1d91ea069eb2a4978
+  license: MIT
+tags: [rounding, edge-case, formatting]
+# Task = src/humanize/number.py at the commit's parent; solution = the fix. __init__.py exports
+# only the number functions (upstream's imports every module). Hidden tests: upstream's
+# tests/test_number.py at the fix commit (every number function, including the new cases).
