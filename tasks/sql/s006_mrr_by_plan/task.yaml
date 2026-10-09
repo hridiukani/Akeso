@@ -1,0 +1,20 @@
+id: s006_mrr_by_plan
+kind: sql
+description: >
+  Two mistakes: annual plans contribute their whole yearly price instead of price / 12, and
+  a subscription whose end_date is 2026-06-30 (its first day no longer subscribed) is
+  counted as active that day (>= instead of >).
+editable_paths: [solution.sql]
+split: dev
+difficulty: hard
+tags: [annual-to-monthly, date-boundary, business-logic]
+sql:
+  question: Monthly recurring revenue (MRR) by plan, as of 2026-06-30.
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 19
+  hidden_seed: 924
+  order_matters: false
+  float_precision: 2
+# Overfitting: annual subscribers differ on the hidden database, and both seeds include a
+# subscription ending exactly on 2026-06-30, so fixing only one of the two mistakes fails.
