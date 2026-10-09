@@ -1,0 +1,19 @@
+id: s012_top_products
+kind: sql
+description: >
+  Ranks with ROW_NUMBER, which gives tied products different ranks and can cut one of
+  them off; ties must share a rank (RANK), and the output order must break ties by
+  product name. Both seeds have ties inside a top 3.
+editable_paths: [solution.sql]
+split: dev
+difficulty: medium
+tags: [ranking-with-ties, window-function, ordering]
+sql:
+  question: The top 3 products by units sold in each category, H1 2026, ties included, in order.
+  as_of: 2026-06-30
+  dataset: store
+  seed: 44
+  hidden_seed: 947
+  order_matters: true
+  float_precision: 2
+# Overfitting: the units and ties differ on the hidden database.
