@@ -1,0 +1,19 @@
+id: s007_latest_plan
+kind: sql
+description: >
+  Picks each customer's "latest" subscription with ROW_NUMBER ordered by plan_id DESC, so
+  the plan with the highest id wins instead of the most recent subscription. Customers
+  who moved to a plan with a lower id (a downgrade) get the wrong plan.
+editable_paths: [solution.sql]
+split: dev
+difficulty: medium
+tags: [window-function, latest-per-group]
+sql:
+  question: Each customer's latest plan as of 2026-06-30.
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 17
+  hidden_seed: 917
+  order_matters: false
+  float_precision: 2
+# Overfitting: different customers downgrade on the hidden database.
