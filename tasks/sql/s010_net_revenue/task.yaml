@@ -1,0 +1,20 @@
+id: s010_net_revenue
+kind: sql
+description: >
+  Three mistakes: a NULL discount makes the line amount NULL, so those lines vanish from
+  the sum; joining returns repeats an order line once per return row (lines returned in
+  two parts are counted twice); and SUM(refund_amount) is NULL when no refund was
+  processed, making the whole category NULL. Sales and refunds must be added up separately.
+editable_paths: [solution.sql]
+split: dev
+difficulty: hard
+tags: [null-arithmetic, join-fan-out, aggregation]
+sql:
+  question: Net revenue (sales minus refunds) per category for orders placed in Q2 2026.
+  as_of: 2026-06-30
+  dataset: store
+  seed: 42
+  hidden_seed: 942
+  order_matters: false
+  float_precision: 2
+# Overfitting: discounts, returns and refunds differ on the hidden database.
