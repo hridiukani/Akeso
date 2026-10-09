@@ -26,10 +26,6 @@ the engineering list.
 - **Held-out tasks.** Every task is `split: dev` so far. Official results need held-out
   tasks the prompt was never tuned on, and runs should report the dev and held-out splits
   separately.
-- **Harder SQL tasks.** s001 took 3 steps and s002 took 5 in the Topic 7 smoke run, so
-  both are easy for the development model. Candidates: `= NULL` instead of `IS NULL`,
-  `WHERE` instead of `HAVING`, an inner join that drops the plan nobody is on, a window
-  function over the wrong partition, annual revenue spread over months.
 - **Mind Groq's daily request cap.** Its headers report 1,000 requests a day (on top of
   8,000 tokens a minute). A 30-task suite at about 4 steps a task is ~120 requests, so
   about 8 development runs a day; plan full-suite debugging around it.
@@ -81,6 +77,14 @@ the engineering list.
   loop ran a fourth step), then passed on every rerun. Its trace was already deleted. Now
   that pytest keeps failed tests' tmp folders (tmp_path_retention_policy = "failed"), look
   at the trace next time it fails. Likely load-sensitive timing in local mode.
+
+## Done in Topic 8 (the full suite)
+
+- **Harder SQL tasks.** Done (steps 8.5 and 8.6): s003 to s014 add `= NULL`, WHERE vs
+  HAVING, a LEFT JOIN undone by WHERE, annual plans spread over months, latest row per
+  group, customer-level churn, join fan-out, NULL arithmetic with duplicated lines, integer
+  division, ranking with ties, a missing month in a time series and latest status by event
+  time, across the saas dataset and a new store dataset.
 
 ## Done in Topic 7 (SQL tasks)
 
