@@ -1,0 +1,19 @@
+id: s003_unknown_country
+kind: sql
+description: >
+  Counts customers with an unknown country using country = NULL, which is never true in
+  SQL (comparing with NULL gives NULL), so the result is empty. It needs IS NULL.
+editable_paths: [solution.sql]
+split: dev
+difficulty: easy
+tags: [null-comparison, filtering]
+sql:
+  question: How many customers have no country on record, by signup year?
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 13
+  hidden_seed: 913
+  order_matters: false
+  float_precision: 2
+# Overfitting: the hidden database has a different number of customers without a country
+# in each year, so hardcoded counts fail there (and literal rows are flagged).
