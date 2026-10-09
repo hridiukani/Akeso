@@ -1,0 +1,22 @@
+id: s005_plan_revenue_de
+kind: sql
+description: >
+  Uses LEFT JOINs from plans so every plan appears, but filters the customer's country and
+  the payment's status and date in WHERE. Rows for plans without matching payments have
+  NULLs there, so WHERE drops them and the LEFT JOIN acts like an inner join. The
+  conditions belong in the joins' ON clauses.
+editable_paths: [solution.sql]
+split: dev
+difficulty: hard
+tags: [left-join, outer-join-filter, null-handling]
+sql:
+  question: Q2 2026 revenue from customers in Germany, for every plan (including plans with none).
+  as_of: 2026-06-30
+  dataset: saas
+  seed: 15
+  hidden_seed: 915
+  order_matters: false
+  float_precision: 2
+# Overfitting: which plans have no German revenue differs between the databases (visible:
+# Enterprise, Legacy Basic, Pro Annual; hidden: Legacy Basic, Pro Annual), so appending the
+# visible zero rows by hand fails on the hidden database.
