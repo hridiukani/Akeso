@@ -1,0 +1,21 @@
+id: r006_boltons_indexedset
+kind: code
+description: >
+  IndexedSet negative indexes past the start wrap around instead of raising IndexError:
+  __getitem__ adds len() and then _get_real_index adds it again, so s[-4] on a 3-item set
+  returns an item; pop(-n-k) likewise removes the wrong item. The fix bounds-checks in
+  the shared _get_real_index (which also accounts for removed 'dead' slots).
+editable_paths: [src/]
+hidden_tests_dir: hidden_tests
+solution_dir: solution
+split: dev
+difficulty: hard
+source: real
+upstream:
+  repo: https://github.com/mahmoud/boltons
+  commit: d0a284fc7ef1aebceb54798600d73be4eeb76ed8
+  license: BSD-3-Clause
+tags: [indexing, off-by-one, shared-helper, stateful-class]
+# Task = boltons/setutils.py at the commit's parent; solution = after the fix. Hidden tests:
+# upstream's tests/test_setutils.py at the fix commit. Patching only __getitem__ (the visible
+# symptom) leaves pop() wrong, which those tests catch.
