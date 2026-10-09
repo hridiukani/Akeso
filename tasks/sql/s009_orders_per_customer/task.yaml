@@ -1,0 +1,18 @@
+id: s009_orders_per_customer
+kind: sql
+description: >
+  Joins orders to order_items to sum the amount spent, then counts rows with COUNT(*),
+  which counts order lines, not orders: an order with three products counts three times.
+editable_paths: [solution.sql]
+split: dev
+difficulty: easy
+tags: [join-fan-out, count-distinct]
+sql:
+  question: How many orders did each customer place in H1 2026, and how much did they spend?
+  as_of: 2026-06-30
+  dataset: store
+  seed: 41
+  hidden_seed: 941
+  order_matters: false
+  float_precision: 2
+# Overfitting: order sizes differ on the hidden database.
