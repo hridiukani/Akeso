@@ -10,6 +10,9 @@ naturalsize(3000, binary=True)    # '2.9 KiB'  (binary units)
 naturalsize(3000, gnu=True)       # '2.9K'     (GNU style)
 ```
 
+Negative sizes are formatted the same way, with a minus sign: `naturalsize(-3000000)` is
+`'-3.0 MB'`.
+
 ## Bug report
 
 > **naturalsize() shows "1000.0 kB" instead of "1.0 MB"**
