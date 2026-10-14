@@ -1,13 +1,14 @@
 id: s007_latest_plan
 kind: sql
 description: >
-  Picks each customer's "latest" subscription with ROW_NUMBER ordered by plan_id DESC, so
-  the plan with the highest id wins instead of the most recent subscription. Customers
-  who moved to a plan with a lower id (a downgrade) get the wrong plan.
+  Two mistakes: ROW_NUMBER orders by plan_id DESC, so the plan with the highest id wins
+  instead of the most recent subscription (downgrades get the wrong plan); and the filter
+  start_date < '2026-06-30' drops subscriptions that start on the as-of day itself.
+  Hardened in calibration (it was a one-line fix).
 editable_paths: [solution.sql]
 split: dev
 difficulty: medium
-tags: [window-function, latest-per-group]
+tags: [window-function, latest-per-group, date-boundary]
 sql:
   question: Each customer's latest plan as of 2026-06-30.
   as_of: 2026-06-30
@@ -16,4 +17,5 @@ sql:
   hidden_seed: 917
   order_matters: false
   float_precision: 2
-# Overfitting: different customers downgrade on the hidden database.
+# Overfitting: different customers downgrade or change plan on 2026-06-30 on the hidden
+# database. Seeds chosen so fixing only one of the two mistakes fails on both databases.

@@ -5,7 +5,7 @@ WITH ranked AS (
            s.plan_id,
            ROW_NUMBER() OVER (PARTITION BY s.customer_id ORDER BY s.plan_id DESC) AS rn
     FROM subscriptions AS s
-    WHERE s.start_date <= '2026-06-30'
+    WHERE s.start_date < '2026-06-30'
 )
 SELECT r.customer_id,
        pl.name AS latest_plan
