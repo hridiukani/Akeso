@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "python-dotenv",
     "openai",
+    "anthropic>=1.14",  # the measurement provider (native SDK, prompt caching)
     "pytest",
     "pytest-xdist",  # runs the test suite in parallel (-n)
     "docker",

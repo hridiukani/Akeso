@@ -43,6 +43,10 @@ class Message:
     tool_calls: tuple[ToolCall, ...] = ()
     tool_call_id: str | None = None
     is_error: bool = False  # tool results only: the tool call failed (Anthropic sends this flag)
+    # Assistant messages only: the provider's own content blocks for this reply, replayed
+    # unchanged when the same provider continues the conversation (Anthropic requires its
+    # thinking blocks to come back exactly as sent). Other providers ignore it.
+    raw: tuple[Any, ...] = ()
 
     def __post_init__(self) -> None:
         # Catch malformed history here rather than as a confusing API error later.
@@ -52,14 +56,16 @@ class Message:
             raise ValueError("tool_call_id and is_error only belong on tool messages")
         if self.role != "assistant" and self.tool_calls:
             raise ValueError("only assistant messages can contain tool calls")
+        if self.role != "assistant" and self.raw:
+            raise ValueError("only assistant messages carry raw provider content")
 
     @classmethod
     def user(cls, content: str) -> Message:
         return cls("user", content)
 
     @classmethod
-    def assistant(cls, content: str, tool_calls: Sequence[ToolCall] = ()) -> Message:
-        return cls("assistant", content, tool_calls=tuple(tool_calls))
+    def assistant(cls, content: str, tool_calls: Sequence[ToolCall] = (), raw: Sequence[Any] = ()) -> Message:
+        return cls("assistant", content, tool_calls=tuple(tool_calls), raw=tuple(raw))
 
     @classmethod
     def tool_result(cls, tool_call_id: str, content: str, is_error: bool = False) -> Message:
@@ -79,8 +85,10 @@ class ToolDefinition:
 class Usage:
     """Token counts for one model call, used for cost tracking."""
 
-    input_tokens: int
+    input_tokens: int  # every input token, including the cached ones below
     output_tokens: int
+    cache_write_tokens: int = 0  # input tokens written to the prompt cache (priced higher)
+    cache_read_tokens: int = 0  # input tokens read from the prompt cache (priced much lower)
 
 
 @dataclass(frozen=True)
@@ -92,7 +100,8 @@ class ModelResponse:
     usage: Usage = field(default_factory=lambda: Usage(input_tokens=0, output_tokens=0))
     stop_reason: StopReason = "end_turn"
     rate_limit_retries: int = 0  # times the provider waited and retried after HTTP 429
+    raw: tuple[Any, ...] = ()  # the provider's own content blocks, see Message.raw
 
     def as_message(self) -> Message:
         """This reply as an assistant message, to append to the conversation history."""
-        return Message.assistant(self.text, self.tool_calls)
+        return Message.assistant(self.text, self.tool_calls, self.raw)

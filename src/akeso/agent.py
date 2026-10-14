@@ -186,6 +186,8 @@ def run_agent(
                     trace.event(
                         "model_call", step=steps, input_tokens=response.usage.input_tokens,
                         output_tokens=response.usage.output_tokens, cost_usd=call_cost,
+                        cache_write_tokens=response.usage.cache_write_tokens,
+                        cache_read_tokens=response.usage.cache_read_tokens,
                         total_tokens=input_tokens + output_tokens, total_cost_usd=cost,
                         stop_reason=response.stop_reason, rate_limit_retries=response.rate_limit_retries,
                         text=response.text,

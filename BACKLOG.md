@@ -6,9 +6,6 @@ the engineering list.
 
 ## Measurement topic
 
-- **Anthropic provider, with prompt caching.** Every official number must come from the
-  Anthropic model, so this is required before the baseline. Caching the repeated system
-  prompt and tool definitions should cut cost on longer runs.
 - **Run fingerprint in summary.json.** Record hashes of the task files, the Docker image
   digest, the prompt version and the limits, so two runs can be proven to use identical
   settings (the Measurement rule). Hash file contents with line endings normalised (or
@@ -80,6 +77,11 @@ the engineering list.
 
 ## Done in Topic 8 (the full suite)
 
+- **Anthropic provider, with prompt caching.** Done (pulled forward for calibration):
+  the native SDK behind the same Provider interface, a cache breakpoint on the system
+  prompt (which caches the tool definitions too), cache writes and reads priced
+  separately, its own 429/overload backoff with retry counts, and thinking blocks replayed
+  exactly. Note: Haiku 4.5's 4096-token cache minimum is above our prompt's size.
 - **Harder SQL tasks.** Done (steps 8.5 and 8.6): s003 to s014 add `= NULL`, WHERE vs
   HAVING, a LEFT JOIN undone by WHERE, annual plans spread over months, latest row per
   group, customer-level churn, join fan-out, NULL arithmetic with duplicated lines, integer

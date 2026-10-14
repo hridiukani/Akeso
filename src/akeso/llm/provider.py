@@ -12,8 +12,8 @@ from akeso.llm.types import Message, ModelResponse, ToolDefinition
 class Provider(Protocol):
     """Anything with this method can be used as an LLM provider.
 
-    Implementations (OpenAI-compatible, Anthropic) come later. The agent loop
-    depends only on this protocol, never on a provider SDK.
+    Implementations: GroqProvider (OpenAI-compatible) and AnthropicProvider. The agent
+    loop depends only on this protocol, never on a provider SDK.
     """
 
     def complete(
@@ -36,7 +36,10 @@ def get_provider(settings: Settings) -> Provider:
         assert settings.groq_api_key and settings.groq_model
         provider: Provider = GroqProvider(api_key=settings.groq_api_key, model=settings.groq_model)
     elif settings.provider == "anthropic":
-        raise NotImplementedError("The Anthropic provider isn't built yet; use PROVIDER=groq.")
+        from akeso.llm.anthropic_provider import AnthropicProvider
+
+        assert settings.anthropic_api_key and settings.anthropic_model
+        provider = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.anthropic_model)
     else:
         raise ValueError(f"Unknown provider {settings.provider!r}.")
 

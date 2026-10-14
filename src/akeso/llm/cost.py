@@ -20,7 +20,10 @@ def cost_usd(model: str, usage: Usage) -> float:
         raise UnknownModelPriceError(
             f"No price for model {model!r}. Add it to PRICES in src/akeso/config.py."
         )
+    uncached = usage.input_tokens - usage.cache_write_tokens - usage.cache_read_tokens
     return (
-        usage.input_tokens * price.input_per_mtok
+        uncached * price.input_per_mtok
+        + usage.cache_write_tokens * price.cache_write
+        + usage.cache_read_tokens * price.cache_read
         + usage.output_tokens * price.output_per_mtok
     ) / TOKENS_PER_MTOK

@@ -20,16 +20,29 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class ModelPrice:
-    """USD per million tokens (MTok)."""
+    """USD per million tokens (MTok). Cache prices default to the usual multiples of the
+    input price (writes 1.25x for the 5-minute cache, reads 0.1x); set them where a model
+    differs."""
 
     input_per_mtok: float
     output_per_mtok: float
+    cache_write_per_mtok: float | None = None
+    cache_read_per_mtok: float | None = None
+
+    @property
+    def cache_write(self) -> float:
+        return self.cache_write_per_mtok if self.cache_write_per_mtok is not None else self.input_per_mtok * 1.25
+
+    @property
+    def cache_read(self) -> float:
+        return self.cache_read_per_mtok if self.cache_read_per_mtok is not None else self.input_per_mtok * 0.1
 
 
 # Keyed by the exact model name sent to the API. A model missing here makes cost
 # calculation fail loudly, so a run can't silently report $0.
-# Anthropic prices checked 2026-10-03 at https://platform.claude.com/docs/en/about-claude/pricing
-# Groq models are 0 because we use Groq's free tier.
+# Anthropic prices checked 2026-10-14 at https://platform.claude.com/docs/en/about-claude/pricing
+# (5-minute cache writes and cache reads included). Groq models are 0 because we use
+# Groq's free tier.
 PRICES: dict[str, ModelPrice] = {
     # Groq (free tier)
     "openai/gpt-oss-120b": ModelPrice(0.0, 0.0),
@@ -37,9 +50,12 @@ PRICES: dict[str, ModelPrice] = {
     "llama-3.3-70b-versatile": ModelPrice(0.0, 0.0),
     "llama-3.1-8b-instant": ModelPrice(0.0, 0.0),
     # Anthropic
-    "claude-haiku-4-5": ModelPrice(1.0, 5.0),
-    "claude-haiku-4-5-20251001": ModelPrice(1.0, 5.0),
-    "claude-sonnet-5": ModelPrice(2.0, 10.0),
+    "claude-haiku-4-5": ModelPrice(1.0, 5.0, 1.25, 0.10),
+    "claude-haiku-4-5-20251001": ModelPrice(1.0, 5.0, 1.25, 0.10),
+    "claude-haiku-5-5": ModelPrice(0.10, 0.50, 0.125, 0.01),  # prompts up to 100K tokens
+    "claude-sonnet-5": ModelPrice(2.0, 10.0, 2.50, 0.20),
+    "claude-sonnet-5-5": ModelPrice(2.0, 10.0, 2.50, 0.10),
+    "claude-opus-5-5": ModelPrice(4.0, 20.0, 5.0, 0.20),
 }
 
 
