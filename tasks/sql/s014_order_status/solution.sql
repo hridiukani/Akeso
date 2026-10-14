@@ -5,7 +5,6 @@ WITH current_status AS (
     JOIN orders AS o ON o.order_id = e.order_id
     WHERE o.ordered_at >= '2026-06-01'
       AND o.ordered_at < '2026-07-01'
-      AND e.happened_at < '2026-07-01'
     GROUP BY e.order_id
 )
 SELECT status, COUNT(*) AS orders

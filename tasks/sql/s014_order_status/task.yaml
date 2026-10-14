@@ -1,9 +1,10 @@
 id: s014_order_status
 kind: sql
 description: >
-  Takes each order's current status as MAX(status), which is the alphabetically last
-  status ('shipped' beats 'delivered' and 'paid'), not the most recent one. The status
-  must come from the order's latest event up to the end of 2026-06-30.
+  Two mistakes: MAX(status) picks the alphabetically last status ('shipped' beats
+  'delivered') instead of the most recent event, and there's no cut-off, so events after
+  2026-06-30 (late-June orders shipped in July) count. Hardened in calibration (it was a
+  one-line fix).
 editable_paths: [solution.sql]
 split: dev
 difficulty: medium
@@ -16,4 +17,5 @@ sql:
   hidden_seed: 946
   order_matters: false
   float_precision: 2
-# Overfitting: status histories differ on the hidden database.
+# Overfitting: status histories differ on the hidden database. Fixing only one of the two
+# mistakes fails on both databases.
