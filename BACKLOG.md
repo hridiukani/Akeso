@@ -16,16 +16,16 @@ the engineering list.
   seconds in each result and summary.json, so a slow run can be put down to the model or
   to the quota.
 - **`akeso run --resume`.** Rerun only the missing or crashed tasks in an existing run
-  folder, instead of starting a long suite again after a crash.
+  folder, instead of starting a long suite again after a crash. Now needed for every
+  official run, not just crashes: Groq's free tier allows 200,000 tokens per day (rolling
+  24 hours), and one full 30-task run uses about 600,000, so an official run has to be
+  spread over about three days (the calibration ran as three chunks under three run ids).
 
 ## Full-suite topic
 
 - **Held-out tasks.** Every task is `split: dev` so far. Official results need held-out
   tasks the prompt was never tuned on, and runs should report the dev and held-out splits
   separately.
-- **Mind Groq's daily request cap.** Its headers report 1,000 requests a day (on top of
-  8,000 tokens a minute). A 30-task suite at about 4 steps a task is ~120 requests, so
-  about 8 development runs a day; plan full-suite debugging around it.
 
 ## Polish topic
 
@@ -52,8 +52,11 @@ the engineering list.
   run them and send the failure back so the agent continues instead of ending. Evidence:
   in run 20261007-215234-a20e17, c003 and c005 stopped without the model running checks.
 - **Trim conversation history.** The whole history is resent every step (input grew from
-  1.4k to 2k tokens per call on c003). Shortening old tool outputs, or prompt caching once
-  the Anthropic provider exists, could cut cost, but may change pass rate. Measure first.
+  1.4k to 2k tokens per call on c003). Shortening old tool outputs could cut cost, but may
+  change pass rate. Measure first. **The strongest candidate on Groq:** its free tier
+  refuses any single request over 8,000 tokens, which ended s010 (after 18 steps), r002
+  and r006 in the calibration (now stop reason provider_token_limit, counted as
+  failures). Trimming would let those tasks be attempted at all.
 - **"No progress" detection beyond checks.** Stop runs that repeat identical reads or edits
   sooner (today only identical failing checks, max steps and tokens stop them). Stopping
   earlier can also stop a run that would have recovered. Measure first.
@@ -81,7 +84,11 @@ the engineering list.
   the native SDK behind the same Provider interface, a cache breakpoint on the system
   prompt (which caches the tool definitions too), cache writes and reads priced
   separately, its own 429/overload backoff with retry counts, and thinking blocks replayed
-  exactly. Note: Haiku 4.5's 4096-token cache minimum is above our prompt's size.
+  exactly. Note: Haiku 4.5's 4096-token cache minimum is above our prompt's size. Built
+  and tested offline only: the MVP measures on Groq's gpt-oss-120b, so nothing has run on it.
+- **Mind Groq's daily limits.** Done (step 8.7): the binding limit turned out to be 200,000
+  tokens per day, not the 1,000 requests; the calibration ran in three chunks across days.
+  Running official measurements within it is now part of `akeso run --resume` above.
 - **Harder SQL tasks.** Done (steps 8.5 and 8.6): s003 to s014 add `= NULL`, WHERE vs
   HAVING, a LEFT JOIN undone by WHERE, annual plans spread over months, latest row per
   group, customer-level churn, join fan-out, NULL arithmetic with duplicated lines, integer
