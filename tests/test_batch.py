@@ -53,7 +53,9 @@ def test_summary_file_has_results_and_totals(tasks_root: Path, tmp_path: Path) -
     data = read_summary(summary.run_dir)
     assert data["run_id"] == "run-1" and data["provider"] == "groq" and data["model"] == "openai/gpt-oss-120b"
     assert [r["task_id"] for r in data["results"]] == ["t001_fixable", "t002_hopeless"]
-    assert data["results"][0]["verdict"] == "passed"
+    assert data["results"][0]["verdict"] == "passed" and data["results"][0]["split"] == "dev"
+    by_split = data["totals"].pop("by_split")
+    assert by_split == {"dev": data["totals"]}  # both test tasks are dev
     assert data["totals"] == {
         "tasks": 2, "passed": 1, "failed": 1, "tampered": 0, "pass_rate": 0.5,
         "average_steps": 1.5, "total_input_tokens": 300, "total_output_tokens": 60, "total_cost_usd": 0.0,
@@ -143,3 +145,16 @@ def test_provider_token_limit_counts_as_a_failure_and_separately(tasks_root: Pat
 
     assert (totals["passed"], totals["failed"], totals["pass_rate"]) == (1, 1, 0.5)
     assert totals["provider_token_limit"] == 1
+
+
+def test_totals_per_split(tasks_root: Path, tmp_path: Path) -> None:
+    yaml = tasks_root / "code" / "t002_hopeless" / "task.yaml"
+    yaml.write_text(yaml.read_text().replace("split: dev", "split: heldout"), newline="\n")
+
+    summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {})), text_reply("I give up.")])
+
+    by_split = read_summary(summary.run_dir)["totals"]["by_split"]
+    assert (by_split["dev"]["tasks"], by_split["dev"]["passed"]) == (1, 1)
+    assert (by_split["heldout"]["tasks"], by_split["heldout"]["passed"], by_split["heldout"]["pass_rate"]) == (1, 0, 0.0)
+    assert summary.totals["by_split"] == by_split
+    assert [r["split"] for r in read_summary(summary.run_dir)["results"]] == ["dev", "heldout"]

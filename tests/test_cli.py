@@ -44,7 +44,8 @@ def fake_run(monkeypatch: pytest.MonkeyPatch):
             result("c002_shipping", Verdict.FAILED, 20, 30000, StopReason.MAX_STEPS),
             result("c003_discount", Verdict.TAMPERED, 4, 6000, StopReason.PASSED),
         ]
-        return RunSummary(run_id="run-xyz", run_dir=Path("runs/run-xyz"), results=results, totals=summarize(results))
+        splits = {"c001_mean": "dev", "c002_shipping": "dev", "c003_discount": "heldout"}
+        return RunSummary(run_id="run-xyz", run_dir=Path("runs/run-xyz"), results=results, totals=summarize(results, splits))
 
     monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
     monkeypatch.setattr(cli, "load_settings", lambda: SETTINGS)
@@ -62,6 +63,7 @@ def test_run_prints_table_and_totals(fake_run) -> None:
     assert "Passed 1/3 (33%), tampered 1" in out.output
     assert "average steps 9.0" in out.output and "total tokens 40,800" in out.output
     assert "rate-limit retries 0" in out.output
+    assert "dev: passed 1/2 (50%)" in out.output and "heldout: passed 0/1 (0%)" in out.output
     assert "Run folder: runs" in out.output and "run-xyz" in out.output
 
 

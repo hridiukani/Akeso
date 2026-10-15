@@ -10,7 +10,7 @@ Tasks run one at a time, sharing one (paced) provider.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,6 +51,7 @@ def run_tasks(
     """Run each task in turn and write the run folder. A task that crashes is recorded
     as an error result rather than stopping the run."""
     tasks = [find_task(task_id, tasks_root) for task_id in task_ids]  # fail fast on a bad id
+    splits = {task.id: task.spec.split for task in tasks}
     settings = settings or load_settings()
     limits = limits or settings.limits
     provider = provider or get_provider(settings)  # shared, so pacing spans the whole run
@@ -74,13 +75,25 @@ def run_tasks(
         results.append(result)
         if on_result:
             on_result(result)
-        _write_summary(run_dir, run_id, started, settings, limits, results)
+        _write_summary(run_dir, run_id, started, settings, limits, results, splits)
 
-    return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results))
+    return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits))
 
 
-def summarize(results: Sequence[AgentResult]) -> dict[str, Any]:
-    """Totals across a run: verdict counts, pass rate, average steps, tokens and cost."""
+def summarize(results: Sequence[AgentResult], splits: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Totals across a run: verdict counts, pass rate, average steps, tokens and cost.
+    With splits (task id -> "dev" or "heldout"), the same totals per split too, under
+    "by_split": official results are reported per split as well as overall."""
+    totals = _totals(results)
+    if splits is not None:
+        totals["by_split"] = {
+            split: _totals([r for r in results if splits.get(r.task_id) == split])
+            for split in sorted(set(splits.values()))
+        }
+    return totals
+
+
+def _totals(results: Sequence[AgentResult]) -> dict[str, Any]:
     count = len(results)
     # r.passed, not the verdict: a run stopped by the provider's token limit is a failure.
     passed = sum(r.passed for r in results)
@@ -104,7 +117,8 @@ def read_summary(run_dir: str | Path) -> dict[str, Any]:
 
 
 def _write_summary(
-    run_dir: Path, run_id: str, started: str, settings: Settings, limits: AgentLimits, results: list[AgentResult]
+    run_dir: Path, run_id: str, started: str, settings: Settings, limits: AgentLimits, results: list[AgentResult],
+    splits: Mapping[str, str],
 ) -> None:
     summary = {
         "run_id": run_id,
@@ -114,8 +128,8 @@ def _write_summary(
         "model": settings.model,
         "prompt_version": AGENT_PROMPT_VERSION,
         "limits": asdict(limits),
-        "totals": summarize(results),
-        "results": [asdict(r) for r in results],
+        "totals": summarize(results, splits),
+        "results": [{**asdict(r), "split": splits.get(r.task_id)} for r in results],
     }
     # Write then rename, so a crash mid-write never leaves a half-written summary.
     temporary = run_dir / f"{SUMMARY_FILE}.tmp"

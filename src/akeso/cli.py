@@ -118,6 +118,11 @@ def run(
         + f" | total cost ${t['total_cost_usd']:.4f}"
         + f" | rate-limit retries {t['total_rate_limit_retries']}"
     )
+    by_split = t.get("by_split", {})
+    if len(by_split) > 1:
+        for split, s in by_split.items():
+            console.print(f"  {split}: passed {s['passed']}/{s['tasks']} ({s['pass_rate']:.0%})"
+                          f" | average steps {s['average_steps']:.1f} | total cost ${s['total_cost_usd']:.4f}")
     console.print(f"Run folder: {summary.run_dir}")
 
 
