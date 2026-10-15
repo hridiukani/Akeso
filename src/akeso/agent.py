@@ -19,7 +19,7 @@ from akeso.environment import Environment
 from akeso.grading import GradeResult, Verdict, collect_changes, grade
 from akeso.llm.cost import cost_usd
 from akeso.llm.provider import Provider, get_provider
-from akeso.llm.types import Message
+from akeso.llm.types import Message, ProviderTokenLimitError
 from akeso.prompts import AGENT_PROMPT_VERSION, build_first_message, build_sql_first_message, system_prompt
 from akeso.sandbox import DockerSandbox
 from akeso.sql_judge import SqlCheck, comparison_rules, support_files
@@ -43,6 +43,9 @@ class StopReason(str, Enum):
     MAX_TOKENS = "max_tokens"
     REPEATED_FAILURE = "repeated_failure"  # the same failing check output N times in a row
     GAVE_UP = "gave_up"  # the model stopped calling tools while the checks were still failing
+    # The conversation grew past what the provider accepts in one request (HTTP 413).
+    # Always counted as a failure, whatever grading says about the changes made so far.
+    PROVIDER_TOKEN_LIMIT = "provider_token_limit"
     ERROR = "error"
 
 
@@ -131,8 +134,9 @@ def run_agent(
 
         def result(stop_reason: StopReason, detail: str, graded: GradeResult | None = None) -> AgentResult:
             verdict = graded.verdict if graded else Verdict.FAILED
+            passed = verdict is Verdict.PASSED and stop_reason is not StopReason.PROVIDER_TOKEN_LIMIT
             outcome = AgentResult(
-                task_id=task.id, passed=verdict is Verdict.PASSED, verdict=verdict, stop_reason=stop_reason,
+                task_id=task.id, passed=passed, verdict=verdict, stop_reason=stop_reason,
                 steps=steps, input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=cost,
                 rate_limit_retries=rate_limit_retries,
                 provider=settings.provider, model=settings.model, environment=env.kind,
@@ -228,6 +232,10 @@ def run_agent(
                     if input_tokens + output_tokens >= limits.max_total_tokens:
                         stop = StopReason.MAX_TOKENS
                         break
+            except ProviderTokenLimitError as problem:
+                stop = StopReason.PROVIDER_TOKEN_LIMIT
+                detail = f"Stopped at step {steps + 1}: {problem} Counted as a failure."
+                trace.event("error", step=steps, error=str(problem))
             except Exception as problem:  # e.g. the provider gave up after rate limits
                 stop, detail = StopReason.ERROR, f"{type(problem).__name__}: {problem}"
                 trace.event("error", step=steps, error=detail)
@@ -245,6 +253,8 @@ def run_agent(
             tampering=[str(f) for f in graded.tampering],
             visible_output=graded.visible_output, hidden_output=graded.hidden_output,
         )
+        if stop is StopReason.PROVIDER_TOKEN_LIMIT:
+            detail += f" The changes made before that: {_explain(graded, task.spec.kind)}"
         return result(stop, detail or _explain(graded, task.spec.kind), graded)
 
 

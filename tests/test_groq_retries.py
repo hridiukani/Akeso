@@ -154,3 +154,14 @@ def test_send_reads_headers_through_the_real_sdk() -> None:
 
     assert reply.text == "hi"
     assert provider.budget._latest.remaining_tokens == 42
+
+
+def test_request_too_large_raises_provider_token_limit() -> None:
+    from akeso.llm.types import ProviderTokenLimitError
+
+    too_large = openai.APIStatusError("Request too large for model", response=response(413), body=None)
+    provider, sleeps = provider_with([too_large, OK])
+
+    with pytest.raises(ProviderTokenLimitError, match="HTTP 413"):
+        ask(provider)
+    assert sleeps == []  # waiting can't help

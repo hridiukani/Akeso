@@ -57,7 +57,7 @@ def test_summary_file_has_results_and_totals(tasks_root: Path, tmp_path: Path) -
     assert data["totals"] == {
         "tasks": 2, "passed": 1, "failed": 1, "tampered": 0, "pass_rate": 0.5,
         "average_steps": 1.5, "total_input_tokens": 300, "total_output_tokens": 60, "total_cost_usd": 0.0,
-        "total_rate_limit_retries": 0,
+        "total_rate_limit_retries": 0, "provider_token_limit": 0,
     }
     assert data["limits"]["max_steps"] == 20
 
@@ -128,3 +128,18 @@ def test_summary_totals_rate_limit_retries(tasks_root: Path, tmp_path: Path) -> 
     data = read_summary(summary.run_dir)
     assert [r["rate_limit_retries"] for r in data["results"]] == [4, 1]
     assert data["totals"]["total_rate_limit_retries"] == 5
+
+
+def test_provider_token_limit_counts_as_a_failure_and_separately(tasks_root: Path, tmp_path: Path) -> None:
+    from dataclasses import replace as replace_result
+
+    from akeso.agent import StopReason
+
+    passing = batch._error_result("t001_fixable", SETTINGS, "run-1", "")
+    limited = replace_result(passing, verdict=Verdict.PASSED, passed=False, stop_reason=StopReason.PROVIDER_TOKEN_LIMIT)
+    solved = replace_result(passing, verdict=Verdict.PASSED, passed=True, stop_reason=StopReason.PASSED)
+
+    totals = summarize([limited, solved])
+
+    assert (totals["passed"], totals["failed"], totals["pass_rate"]) == (1, 1, 0.5)
+    assert totals["provider_token_limit"] == 1

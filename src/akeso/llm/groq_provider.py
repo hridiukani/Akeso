@@ -16,6 +16,7 @@ from akeso.llm.pacing import RateLimitBudget, RateLimitHeaders, estimate_tokens
 from akeso.llm.types import (
     Message,
     ModelResponse,
+    ProviderTokenLimitError,
     StopReason,
     ToolCall,
     ToolDefinition,
@@ -118,8 +119,10 @@ class GroqProvider:
                     delay, rate_limited, self.max_attempts,
                 )
                 self._sleep(delay)
-            except openai.BadRequestError as error:
-                if _error_code(error) != "tool_use_failed":
+            except openai.APIStatusError as error:
+                if error.status_code == 413:
+                    raise ProviderTokenLimitError(f"Groq refused the request as too large (HTTP 413): {error.message}") from error
+                if not isinstance(error, openai.BadRequestError) or _error_code(error) != "tool_use_failed":
                     raise  # a genuinely bad request: retrying won't help
                 rejected += 1
                 if rejected >= self.max_tool_call_attempts:

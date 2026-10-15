@@ -175,3 +175,13 @@ def test_get_provider_builds_the_anthropic_provider() -> None:
 def test_raw_content_only_on_assistant_messages() -> None:
     with pytest.raises(ValueError, match="only assistant messages carry raw provider content"):
         Message("user", "hi", raw=({"type": "text"},))
+
+
+def test_request_too_large_raises_provider_token_limit() -> None:
+    from akeso.llm.types import ProviderTokenLimitError
+
+    provider, sleeps, _ = provider_with([status_error(413)])
+
+    with pytest.raises(ProviderTokenLimitError, match="HTTP 413"):
+        provider.complete("s", [Message.user("hi")])
+    assert sleeps == []

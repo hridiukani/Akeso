@@ -233,3 +233,29 @@ def test_rate_limit_retries_are_totalled_per_task(task_dir: Path, tmp_path: Path
     result, _, _ = run(task_dir, tmp_path, responses)
 
     assert result.rate_limit_retries == 3
+
+
+class TooLargeProvider:
+    """Answers with the given replies, then refuses every request as too large (HTTP 413)."""
+
+    def __init__(self, replies) -> None:
+        self.replies = list(replies)
+
+    def complete(self, system, messages, tools=None):
+        from akeso.llm.types import ProviderTokenLimitError
+
+        if not self.replies:
+            raise ProviderTokenLimitError("Groq refused the request as too large (HTTP 413).")
+        return self.replies.pop(0)
+
+
+def test_provider_token_limit_is_its_own_stop_reason_and_a_failure(task_dir: Path, tmp_path: Path) -> None:
+    # The agent even fixes the bug before the conversation outgrows the provider.
+    result = run_agent(task_dir, settings=GROQ, provider=TooLargeProvider([tool_reply(FIX)]),
+                       environment_factory=FakeFactory(checks=judge), trace_dir=tmp_path / "runs")
+
+    assert result.stop_reason is StopReason.PROVIDER_TOKEN_LIMIT
+    assert result.verdict is Verdict.PASSED  # the grade of the changes is kept honest...
+    assert not result.passed  # ...but the run counts as a failure
+    assert result.detail.startswith("Stopped at step 2: Groq refused the request as too large (HTTP 413). Counted as a failure.")
+    assert "The changes made before that: Graded in a fresh environment" in result.detail

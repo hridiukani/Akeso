@@ -112,6 +112,7 @@ def run(
     console.print(
         f"Passed {t['passed']}/{t['tasks']} ({t['pass_rate']:.0%})"
         + (f", tampered {t['tampered']}" if t["tampered"] else "")
+        + (f", stopped by the provider's token limit {t['provider_token_limit']}" if t["provider_token_limit"] else "")
         + f" | average steps {t['average_steps']:.1f}"
         + f" | total tokens {t['total_input_tokens'] + t['total_output_tokens']:,}"
         + f" | total cost ${t['total_cost_usd']:.4f}"

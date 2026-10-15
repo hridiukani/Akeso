@@ -1,7 +1,7 @@
 """Anthropic provider: the native Anthropic SDK, with prompt caching.
 
-Official measurements run on this provider (see CLAUDE.md's Measurement rule), so its
-settings are kept fixed and simple: the model's default thinking and effort, and one
+Not the MVP's measurement model (see CLAUDE.md's Measurement rule); built and tested
+offline for later. Its settings are kept fixed and simple: the model's default thinking and effort, and one
 cache breakpoint on the system prompt. Tools render before the system prompt, so that
 breakpoint caches the tool definitions and the system prompt together; every step of a
 run then reads them from the cache instead of paying for them again.
@@ -17,7 +17,7 @@ from typing import Any
 
 import anthropic
 
-from akeso.llm.types import Message, ModelResponse, StopReason, ToolCall, ToolDefinition, Usage
+from akeso.llm.types import Message, ModelResponse, ProviderTokenLimitError, StopReason, ToolCall, ToolDefinition, Usage
 
 # Anthropic stop_reason -> our StopReason ("refusal", "pause_turn", ... map to "other").
 _STOP_REASONS: dict[str, StopReason] = {"end_turn": "end_turn", "tool_use": "tool_use", "max_tokens": "max_tokens"}
@@ -70,6 +70,8 @@ class AnthropicProvider:
             try:
                 return self._client.messages.create(**request), retries
             except anthropic.APIStatusError as error:
+                if error.status_code == 413:
+                    raise ProviderTokenLimitError(f"Anthropic refused the request as too large (HTTP 413): {error.message}") from error
                 if error.status_code not in _RETRYABLE_STATUS:
                     raise  # a genuinely bad request: retrying won't help
                 retries += 1

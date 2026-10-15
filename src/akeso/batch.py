@@ -82,11 +82,12 @@ def run_tasks(
 def summarize(results: Sequence[AgentResult]) -> dict[str, Any]:
     """Totals across a run: verdict counts, pass rate, average steps, tokens and cost."""
     count = len(results)
-    passed = sum(r.verdict is Verdict.PASSED for r in results)
+    # r.passed, not the verdict: a run stopped by the provider's token limit is a failure.
+    passed = sum(r.passed for r in results)
     return {
         "tasks": count,
         "passed": passed,
-        "failed": sum(r.verdict is Verdict.FAILED for r in results),
+        "failed": sum(not r.passed and r.verdict is not Verdict.TAMPERED for r in results),
         "tampered": sum(r.verdict is Verdict.TAMPERED for r in results),
         "pass_rate": passed / count if count else 0.0,
         "average_steps": sum(r.steps for r in results) / count if count else 0.0,
@@ -94,6 +95,7 @@ def summarize(results: Sequence[AgentResult]) -> dict[str, Any]:
         "total_output_tokens": sum(r.output_tokens for r in results),
         "total_cost_usd": sum(r.cost_usd for r in results),
         "total_rate_limit_retries": sum(r.rate_limit_retries for r in results),
+        "provider_token_limit": sum(r.stop_reason is StopReason.PROVIDER_TOKEN_LIMIT for r in results),
     }
 
 

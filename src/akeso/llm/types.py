@@ -19,6 +19,12 @@ Role = Literal["user", "assistant", "tool"]
 StopReason = Literal["end_turn", "tool_use", "max_tokens", "other"]
 
 
+class ProviderTokenLimitError(Exception):
+    """One request is bigger than the provider accepts at all (HTTP 413), e.g. Groq's
+    free-tier limit of 8,000 tokens per request. Waiting doesn't help: the conversation
+    has outgrown what this provider can serve."""
+
+
 @dataclass(frozen=True)
 class ToolCall:
     """A request from the model to run one of our tools."""
