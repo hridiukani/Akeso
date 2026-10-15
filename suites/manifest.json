@@ -1,0 +1,615 @@
+{
+  "frozen_on": "2026-10-15",
+  "hash_rule": "sha256 of the file's bytes with CRLF and CR line endings normalised to LF",
+  "fingerprint": "bff127af0ebdebfb9420f3f2ffc53873e11796aec16f783d08ed452af1b15de8",
+  "tasks": {
+    "c001_mean": {
+      "split": "dev",
+      "files": [
+        "code/c001_mean/README.md",
+        "code/c001_mean/hidden_tests/test_hidden_stats.py",
+        "code/c001_mean/pytest.ini",
+        "code/c001_mean/solution/src/stats.py",
+        "code/c001_mean/src/stats.py",
+        "code/c001_mean/task.yaml",
+        "code/c001_mean/tests/test_stats.py"
+      ]
+    },
+    "c002_shipping": {
+      "split": "dev",
+      "files": [
+        "code/c002_shipping/README.md",
+        "code/c002_shipping/hidden_tests/test_hidden_shipping.py",
+        "code/c002_shipping/pytest.ini",
+        "code/c002_shipping/solution/src/shipping.py",
+        "code/c002_shipping/src/shipping.py",
+        "code/c002_shipping/task.yaml",
+        "code/c002_shipping/tests/test_shipping.py"
+      ]
+    },
+    "c003_discount": {
+      "split": "dev",
+      "files": [
+        "code/c003_discount/README.md",
+        "code/c003_discount/hidden_tests/test_hidden_cart.py",
+        "code/c003_discount/hidden_tests/test_hidden_pricing.py",
+        "code/c003_discount/pytest.ini",
+        "code/c003_discount/solution/src/cart.py",
+        "code/c003_discount/src/cart.py",
+        "code/c003_discount/src/pricing.py",
+        "code/c003_discount/task.yaml",
+        "code/c003_discount/tests/test_cart.py",
+        "code/c003_discount/tests/test_pricing.py"
+      ]
+    },
+    "c004_duration": {
+      "split": "heldout",
+      "files": [
+        "code/c004_duration/README.md",
+        "code/c004_duration/hidden_tests/test_hidden_durations.py",
+        "code/c004_duration/pytest.ini",
+        "code/c004_duration/solution/src/durations.py",
+        "code/c004_duration/src/durations.py",
+        "code/c004_duration/task.yaml",
+        "code/c004_duration/tests/test_durations.py"
+      ]
+    },
+    "c005_calendar": {
+      "split": "heldout",
+      "files": [
+        "code/c005_calendar/README.md",
+        "code/c005_calendar/hidden_tests/test_hidden_dates.py",
+        "code/c005_calendar/pytest.ini",
+        "code/c005_calendar/solution/src/dates.py",
+        "code/c005_calendar/src/dates.py",
+        "code/c005_calendar/task.yaml",
+        "code/c005_calendar/tests/test_dates.py"
+      ]
+    },
+    "c006_shipping_weight": {
+      "split": "dev",
+      "files": [
+        "code/c006_shipping_weight/README.md",
+        "code/c006_shipping_weight/hidden_tests/test_hidden_packing.py",
+        "code/c006_shipping_weight/pytest.ini",
+        "code/c006_shipping_weight/solution/src/catalog.py",
+        "code/c006_shipping_weight/solution/src/orders.py",
+        "code/c006_shipping_weight/solution/src/report.py",
+        "code/c006_shipping_weight/solution/src/shipping.py",
+        "code/c006_shipping_weight/src/catalog.py",
+        "code/c006_shipping_weight/src/orders.py",
+        "code/c006_shipping_weight/src/report.py",
+        "code/c006_shipping_weight/src/shipping.py",
+        "code/c006_shipping_weight/task.yaml",
+        "code/c006_shipping_weight/tests/test_packing.py"
+      ]
+    },
+    "c007_search_keywords": {
+      "split": "heldout",
+      "files": [
+        "code/c007_search_keywords/README.md",
+        "code/c007_search_keywords/hidden_tests/test_hidden_keywords.py",
+        "code/c007_search_keywords/pytest.ini",
+        "code/c007_search_keywords/solution/src/keywords.py",
+        "code/c007_search_keywords/solution/src/stopwords.py",
+        "code/c007_search_keywords/src/keywords.py",
+        "code/c007_search_keywords/src/stopwords.py",
+        "code/c007_search_keywords/task.yaml",
+        "code/c007_search_keywords/tests/test_custom_stop_words.py",
+        "code/c007_search_keywords/tests/test_keywords.py"
+      ]
+    },
+    "c008_invoice_rounding": {
+      "split": "dev",
+      "files": [
+        "code/c008_invoice_rounding/README.md",
+        "code/c008_invoice_rounding/hidden_tests/test_hidden_invoice.py",
+        "code/c008_invoice_rounding/pytest.ini",
+        "code/c008_invoice_rounding/solution/src/invoice.py",
+        "code/c008_invoice_rounding/src/invoice.py",
+        "code/c008_invoice_rounding/task.yaml",
+        "code/c008_invoice_rounding/tests/test_invoice.py"
+      ]
+    },
+    "c009_csv_quotes": {
+      "split": "heldout",
+      "files": [
+        "code/c009_csv_quotes/README.md",
+        "code/c009_csv_quotes/hidden_tests/test_hidden_csvrow.py",
+        "code/c009_csv_quotes/pytest.ini",
+        "code/c009_csv_quotes/solution/src/csvrow.py",
+        "code/c009_csv_quotes/src/csvrow.py",
+        "code/c009_csv_quotes/task.yaml",
+        "code/c009_csv_quotes/tests/test_csvrow.py"
+      ]
+    },
+    "c010_merge_intervals": {
+      "split": "dev",
+      "files": [
+        "code/c010_merge_intervals/README.md",
+        "code/c010_merge_intervals/hidden_tests/test_hidden_intervals.py",
+        "code/c010_merge_intervals/pytest.ini",
+        "code/c010_merge_intervals/solution/src/intervals.py",
+        "code/c010_merge_intervals/src/intervals.py",
+        "code/c010_merge_intervals/task.yaml",
+        "code/c010_merge_intervals/tests/test_intervals.py"
+      ]
+    },
+    "r001_humanize_naturalsize": {
+      "split": "dev",
+      "files": [
+        "code/r001_humanize_naturalsize/LICENCE",
+        "code/r001_humanize_naturalsize/README.md",
+        "code/r001_humanize_naturalsize/hidden_tests/test_hidden_filesize.py",
+        "code/r001_humanize_naturalsize/pytest.ini",
+        "code/r001_humanize_naturalsize/solution/src/humanize/filesize.py",
+        "code/r001_humanize_naturalsize/src/humanize/__init__.py",
+        "code/r001_humanize_naturalsize/src/humanize/filesize.py",
+        "code/r001_humanize_naturalsize/src/humanize/i18n.py",
+        "code/r001_humanize_naturalsize/task.yaml",
+        "code/r001_humanize_naturalsize/tests/test_naturalsize.py"
+      ]
+    },
+    "r002_more_itertools_numeric_range": {
+      "split": "dev",
+      "files": [
+        "code/r002_more_itertools_numeric_range/LICENSE",
+        "code/r002_more_itertools_numeric_range/README.md",
+        "code/r002_more_itertools_numeric_range/hidden_tests/test_hidden_numeric_range.py",
+        "code/r002_more_itertools_numeric_range/pytest.ini",
+        "code/r002_more_itertools_numeric_range/solution/src/more_itertools/more.py",
+        "code/r002_more_itertools_numeric_range/src/more_itertools/__init__.py",
+        "code/r002_more_itertools_numeric_range/src/more_itertools/more.py",
+        "code/r002_more_itertools_numeric_range/task.yaml",
+        "code/r002_more_itertools_numeric_range/tests/test_numeric_range.py"
+      ]
+    },
+    "r003_boltons_daterange": {
+      "split": "heldout",
+      "files": [
+        "code/r003_boltons_daterange/LICENSE",
+        "code/r003_boltons_daterange/README.md",
+        "code/r003_boltons_daterange/hidden_tests/test_hidden_timeutils.py",
+        "code/r003_boltons_daterange/pytest.ini",
+        "code/r003_boltons_daterange/solution/src/boltons/timeutils.py",
+        "code/r003_boltons_daterange/src/boltons/__init__.py",
+        "code/r003_boltons_daterange/src/boltons/timeutils.py",
+        "code/r003_boltons_daterange/task.yaml",
+        "code/r003_boltons_daterange/tests/test_daterange_steps.py"
+      ]
+    },
+    "r004_humanize_fractional": {
+      "split": "dev",
+      "files": [
+        "code/r004_humanize_fractional/LICENCE",
+        "code/r004_humanize_fractional/README.md",
+        "code/r004_humanize_fractional/hidden_tests/test_hidden_number.py",
+        "code/r004_humanize_fractional/pytest.ini",
+        "code/r004_humanize_fractional/solution/src/humanize/number.py",
+        "code/r004_humanize_fractional/src/humanize/__init__.py",
+        "code/r004_humanize_fractional/src/humanize/i18n.py",
+        "code/r004_humanize_fractional/src/humanize/number.py",
+        "code/r004_humanize_fractional/task.yaml",
+        "code/r004_humanize_fractional/tests/test_fractional.py"
+      ]
+    },
+    "r005_cachetools_getsizeof": {
+      "split": "heldout",
+      "files": [
+        "code/r005_cachetools_getsizeof/LICENSE",
+        "code/r005_cachetools_getsizeof/README.md",
+        "code/r005_cachetools_getsizeof/hidden_tests/__init__.py",
+        "code/r005_cachetools_getsizeof/hidden_tests/test_cache.py",
+        "code/r005_cachetools_getsizeof/hidden_tests/test_fifo.py",
+        "code/r005_cachetools_getsizeof/hidden_tests/test_lfu.py",
+        "code/r005_cachetools_getsizeof/hidden_tests/test_lru.py",
+        "code/r005_cachetools_getsizeof/hidden_tests/test_rr.py",
+        "code/r005_cachetools_getsizeof/hidden_tests/test_tlru.py",
+        "code/r005_cachetools_getsizeof/hidden_tests/test_ttl.py",
+        "code/r005_cachetools_getsizeof/pytest.ini",
+        "code/r005_cachetools_getsizeof/solution/src/cachetools/__init__.py",
+        "code/r005_cachetools_getsizeof/src/cachetools/__init__.py",
+        "code/r005_cachetools_getsizeof/src/cachetools/_cached.py",
+        "code/r005_cachetools_getsizeof/src/cachetools/_cachedmethod.py",
+        "code/r005_cachetools_getsizeof/src/cachetools/keys.py",
+        "code/r005_cachetools_getsizeof/task.yaml",
+        "code/r005_cachetools_getsizeof/tests/test_cache_growing.py"
+      ]
+    },
+    "r006_boltons_indexedset": {
+      "split": "dev",
+      "files": [
+        "code/r006_boltons_indexedset/LICENSE",
+        "code/r006_boltons_indexedset/README.md",
+        "code/r006_boltons_indexedset/hidden_tests/test_hidden_setutils.py",
+        "code/r006_boltons_indexedset/pytest.ini",
+        "code/r006_boltons_indexedset/solution/src/boltons/setutils.py",
+        "code/r006_boltons_indexedset/src/boltons/__init__.py",
+        "code/r006_boltons_indexedset/src/boltons/setutils.py",
+        "code/r006_boltons_indexedset/src/boltons/typeutils.py",
+        "code/r006_boltons_indexedset/task.yaml",
+        "code/r006_boltons_indexedset/tests/test_indexedset_indexing.py"
+      ]
+    },
+    "s001_revenue_by_plan": {
+      "split": "dev",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s001_revenue_by_plan/README.md",
+        "sql/s001_revenue_by_plan/solution.sql",
+        "sql/s001_revenue_by_plan/solution/solution.sql",
+        "sql/s001_revenue_by_plan/task.yaml"
+      ]
+    },
+    "s002_monthly_revenue": {
+      "split": "dev",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s002_monthly_revenue/README.md",
+        "sql/s002_monthly_revenue/solution.sql",
+        "sql/s002_monthly_revenue/solution/solution.sql",
+        "sql/s002_monthly_revenue/task.yaml"
+      ]
+    },
+    "s003_unknown_country": {
+      "split": "heldout",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s003_unknown_country/README.md",
+        "sql/s003_unknown_country/solution.sql",
+        "sql/s003_unknown_country/solution/solution.sql",
+        "sql/s003_unknown_country/task.yaml"
+      ]
+    },
+    "s004_big_spenders": {
+      "split": "heldout",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s004_big_spenders/README.md",
+        "sql/s004_big_spenders/solution.sql",
+        "sql/s004_big_spenders/solution/solution.sql",
+        "sql/s004_big_spenders/task.yaml"
+      ]
+    },
+    "s005_plan_revenue_de": {
+      "split": "dev",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s005_plan_revenue_de/README.md",
+        "sql/s005_plan_revenue_de/solution.sql",
+        "sql/s005_plan_revenue_de/solution/solution.sql",
+        "sql/s005_plan_revenue_de/task.yaml"
+      ]
+    },
+    "s006_mrr_by_plan": {
+      "split": "dev",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s006_mrr_by_plan/README.md",
+        "sql/s006_mrr_by_plan/solution.sql",
+        "sql/s006_mrr_by_plan/solution/solution.sql",
+        "sql/s006_mrr_by_plan/task.yaml"
+      ]
+    },
+    "s007_latest_plan": {
+      "split": "dev",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s007_latest_plan/README.md",
+        "sql/s007_latest_plan/solution.sql",
+        "sql/s007_latest_plan/solution/solution.sql",
+        "sql/s007_latest_plan/task.yaml"
+      ]
+    },
+    "s008_monthly_churn": {
+      "split": "heldout",
+      "files": [
+        "datasets/saas/README.md",
+        "datasets/saas/generate.py",
+        "datasets/saas/schema.sql",
+        "sql/s008_monthly_churn/README.md",
+        "sql/s008_monthly_churn/solution.sql",
+        "sql/s008_monthly_churn/solution/solution.sql",
+        "sql/s008_monthly_churn/task.yaml"
+      ]
+    },
+    "s009_orders_per_customer": {
+      "split": "heldout",
+      "files": [
+        "datasets/store/README.md",
+        "datasets/store/generate.py",
+        "datasets/store/schema.sql",
+        "sql/s009_orders_per_customer/README.md",
+        "sql/s009_orders_per_customer/solution.sql",
+        "sql/s009_orders_per_customer/solution/solution.sql",
+        "sql/s009_orders_per_customer/task.yaml"
+      ]
+    },
+    "s010_net_revenue": {
+      "split": "dev",
+      "files": [
+        "datasets/store/README.md",
+        "datasets/store/generate.py",
+        "datasets/store/schema.sql",
+        "sql/s010_net_revenue/README.md",
+        "sql/s010_net_revenue/solution.sql",
+        "sql/s010_net_revenue/solution/solution.sql",
+        "sql/s010_net_revenue/task.yaml"
+      ]
+    },
+    "s011_return_rate": {
+      "split": "dev",
+      "files": [
+        "datasets/store/README.md",
+        "datasets/store/generate.py",
+        "datasets/store/schema.sql",
+        "sql/s011_return_rate/README.md",
+        "sql/s011_return_rate/solution.sql",
+        "sql/s011_return_rate/solution/solution.sql",
+        "sql/s011_return_rate/task.yaml"
+      ]
+    },
+    "s012_top_products": {
+      "split": "dev",
+      "files": [
+        "datasets/store/README.md",
+        "datasets/store/generate.py",
+        "datasets/store/schema.sql",
+        "sql/s012_top_products/README.md",
+        "sql/s012_top_products/solution.sql",
+        "sql/s012_top_products/solution/solution.sql",
+        "sql/s012_top_products/task.yaml"
+      ]
+    },
+    "s013_monthly_growth": {
+      "split": "heldout",
+      "files": [
+        "datasets/store/README.md",
+        "datasets/store/generate.py",
+        "datasets/store/schema.sql",
+        "sql/s013_monthly_growth/README.md",
+        "sql/s013_monthly_growth/solution.sql",
+        "sql/s013_monthly_growth/solution/solution.sql",
+        "sql/s013_monthly_growth/task.yaml"
+      ]
+    },
+    "s014_order_status": {
+      "split": "heldout",
+      "files": [
+        "datasets/store/README.md",
+        "datasets/store/generate.py",
+        "datasets/store/schema.sql",
+        "sql/s014_order_status/README.md",
+        "sql/s014_order_status/solution.sql",
+        "sql/s014_order_status/solution/solution.sql",
+        "sql/s014_order_status/task.yaml"
+      ]
+    }
+  },
+  "files": {
+    "code/c001_mean/README.md": "d7d413c034a3a7a103f3ee4ef28b94c2f11ddf8e79d8f2aa87bbb94b99527952",
+    "code/c001_mean/hidden_tests/test_hidden_stats.py": "b1ca0d0503a435d1d60a12aff6302511c34e5b13bf51cecb2bd13e770dc88269",
+    "code/c001_mean/pytest.ini": "7ad69877921756ded2710a405dfc0d7758942124f7f220ed496ed41d5062c5f6",
+    "code/c001_mean/solution/src/stats.py": "0664ddaa42ed140876b968db8a0f995f351e64492fff17440792cb45f4a57f4c",
+    "code/c001_mean/src/stats.py": "df79f2b7f95bba80f1a2510fc8fe7a201242e9c583ca3b68de81053c9c421fcf",
+    "code/c001_mean/task.yaml": "c8a2fae190f6d1801673f50dbebc9c381d0a4ae280fff157aff5ef2df15b0414",
+    "code/c001_mean/tests/test_stats.py": "5525d6a934a5836784b8effa414474997352a43fd8c404b14e91b6fd1bb93b25",
+    "code/c002_shipping/README.md": "964dbb7bee431258113047e97a9550a2a0a235201f6f953955dec030af0e0b46",
+    "code/c002_shipping/hidden_tests/test_hidden_shipping.py": "532ad170efb43f2e73ba9951f1722270d9645dabbe345e5f19df4c7de6ae8c95",
+    "code/c002_shipping/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c002_shipping/solution/src/shipping.py": "f065445744e5cc174438f497bdfffe00c76a2b96f427e0a1fcb999f602939480",
+    "code/c002_shipping/src/shipping.py": "90de4a69ac4e398d55ce6fa2ea894e7aa843ee85928c019450f28c6afdd634d9",
+    "code/c002_shipping/task.yaml": "d523c6f2e48ac11eaf5683eb4caf17c8081e20115a2ba8df5bc0b7bc2c3f5fee",
+    "code/c002_shipping/tests/test_shipping.py": "e8664328fe10886c3c81b613cd6b34f42a0d05da88d6a34f945c16491042423b",
+    "code/c003_discount/README.md": "60993760534c4e58335c02cfbe362e700065ab41c2642d51b911d6b679672ca6",
+    "code/c003_discount/hidden_tests/test_hidden_cart.py": "6f48cd8f854592f53dc9d5c136ef0a09bb4f82155c7c05551b8b8d571f6552f3",
+    "code/c003_discount/hidden_tests/test_hidden_pricing.py": "31f010e85815bd6e39ee83e0f36ec7a0b59ddbfe1cd5c4ae0283d2bbea5a8fc9",
+    "code/c003_discount/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c003_discount/solution/src/cart.py": "c21c12b0e1994e7a32624e7ad0ff2167c203da71fd34493e6b55b6416be1a418",
+    "code/c003_discount/src/cart.py": "0aea13902a70b12d77788a24f7ab47bac4e397bc233b3adba19df91d6c3ebb51",
+    "code/c003_discount/src/pricing.py": "72c7a465c800c934efeb6cc74ed4077b38e25a2d2cf7969f922b6eb07434c30a",
+    "code/c003_discount/task.yaml": "ac2a395c497b9ee67707fe59c9e6cb71715fad6515e024df44a9e0a8bb426a04",
+    "code/c003_discount/tests/test_cart.py": "f9b89027f2362231edb9d9277d54353adb9ed6346cb8d298f739767da76a48b5",
+    "code/c003_discount/tests/test_pricing.py": "3ff5147781569658087cbf43e41a9731344f49e52e0519c2cb175ca0ab15a98b",
+    "code/c004_duration/README.md": "becf8e4d42d2136241b0ed9962200ff756a1b5c3e40535c896cb5027b3b209ce",
+    "code/c004_duration/hidden_tests/test_hidden_durations.py": "d6201b2de333411f34729efdc662e598ccc62cfed70a7c89ee65be2f7d469b71",
+    "code/c004_duration/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c004_duration/solution/src/durations.py": "89ae6e80afc225191dbca72ae8d30825e136d5e633b51725eb3e2b4eae6b2c05",
+    "code/c004_duration/src/durations.py": "11238eb912f05af58747b4c75deef868e057f9d76e5232ad4915e4789b586db3",
+    "code/c004_duration/task.yaml": "4300d7ef06db61c5e2be2aee26bdfc93fa2e5fc33ca2fb148de6bc8c4629aa03",
+    "code/c004_duration/tests/test_durations.py": "3d4c3001920ab2ae0469a77ee4aba6ccf240c30d50ff4b7b9c31a816eb21bce6",
+    "code/c005_calendar/README.md": "e2a3817b2cb55e3931f1d3e2d346ce7887ad2567c5bf946610e14eb04909b1df",
+    "code/c005_calendar/hidden_tests/test_hidden_dates.py": "67078ec410f35a56e6218636b355600beac91f6601275e7f3cb9981917139838",
+    "code/c005_calendar/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c005_calendar/solution/src/dates.py": "966a854b6c19897aef25482442613b7a0c5553b2709cc8d7d8531367e8431f7e",
+    "code/c005_calendar/src/dates.py": "2a7b724106830dee314dd6d938e412781b23579f17ca50b6e4484c1b7497220a",
+    "code/c005_calendar/task.yaml": "482b908de076d081c59f135d3910499055f7eb841da5e329d1f3e9b5f26bdeeb",
+    "code/c005_calendar/tests/test_dates.py": "d9f136f31b322c81f4a04db34f8d12333ac103920041960e15523ba44d443ba9",
+    "code/c006_shipping_weight/README.md": "19c0a91031f511bd252a483f0f55881e02c9e89d0b99be289589d2a9a5e965f5",
+    "code/c006_shipping_weight/hidden_tests/test_hidden_packing.py": "b4a9acd6e8b5e63bfa6e54d9ebb52fa7df8e59574164ea329306c49b06dfabb1",
+    "code/c006_shipping_weight/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c006_shipping_weight/solution/src/catalog.py": "f62b89189be4def8f304f815187d1a8cb6ab5eba6a83ba57185863b323f73f2c",
+    "code/c006_shipping_weight/solution/src/orders.py": "0120bf1a49c38518a0d0114f1aa80a62cea83822cdef9a3182d44b35f55ac958",
+    "code/c006_shipping_weight/solution/src/report.py": "e6186d43e487edb92604b2362bb46a6a3dbe8eeaef4e5dc8ff518774baf30ca0",
+    "code/c006_shipping_weight/solution/src/shipping.py": "2b6d0e691d96586f4984b5e26d0efa38ff8405932f69a878f0766dc9c9857011",
+    "code/c006_shipping_weight/src/catalog.py": "f62b89189be4def8f304f815187d1a8cb6ab5eba6a83ba57185863b323f73f2c",
+    "code/c006_shipping_weight/src/orders.py": "6d0171f2bf5a92ee5da220bf22123ace4c1f46dc69581c8f35f91df2f799a630",
+    "code/c006_shipping_weight/src/report.py": "ade587093df425bdaa1c41df8148afd7832c7837242fe6a3f14400e5784d1393",
+    "code/c006_shipping_weight/src/shipping.py": "2b6d0e691d96586f4984b5e26d0efa38ff8405932f69a878f0766dc9c9857011",
+    "code/c006_shipping_weight/task.yaml": "96ba3f128c2d8731541fb4ef89a572b371090ab47c46bd5cb5693a6d0a2f289d",
+    "code/c006_shipping_weight/tests/test_packing.py": "17ef6460aabcaaa27be5fb4ba71b2aa9060054b48e7cd643d62bb0b1d0287511",
+    "code/c007_search_keywords/README.md": "d36dea01ce3a169166a5e522d66ab4955c7bf4c7921a9d913268204c56186031",
+    "code/c007_search_keywords/hidden_tests/test_hidden_keywords.py": "84ba530fe74378195bc716d3b67d73c0b48f9734b3879f9a62a8a44d589e1c43",
+    "code/c007_search_keywords/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c007_search_keywords/solution/src/keywords.py": "3264cc34693979ba54d8d82ad0046283c130dd3b21405c712bc2111ae95bfbd8",
+    "code/c007_search_keywords/solution/src/stopwords.py": "fd2288ff3c4afa23a83ba3ebafbec8df9e4e215c8aa831389d5ddc365a50704c",
+    "code/c007_search_keywords/src/keywords.py": "007a5a1c56d9453805851b366223201dbd4f4fdba8c3e273d094f9255d3358dd",
+    "code/c007_search_keywords/src/stopwords.py": "fd2288ff3c4afa23a83ba3ebafbec8df9e4e215c8aa831389d5ddc365a50704c",
+    "code/c007_search_keywords/task.yaml": "69c43ae2c151eb4c5990e0e87b3a9a60b6704d0b446f92aa080d7d57d2a42ae9",
+    "code/c007_search_keywords/tests/test_custom_stop_words.py": "4ac90e9965fd74a5f80ebdc42a76b5495716c33bddf890baa51944f4a494fe26",
+    "code/c007_search_keywords/tests/test_keywords.py": "77c118443dddd649570639cda8f65b0be8a1fbe524d81408371d4d4fa9f63af1",
+    "code/c008_invoice_rounding/README.md": "4a6f40e5185936e975fa1a394a31dedbf8fe6fe39ff771eaeb8821a054b605be",
+    "code/c008_invoice_rounding/hidden_tests/test_hidden_invoice.py": "1369ed4bb31dd6279a70de9c1fa1a10f26b2d3c4d45150b3e77e082a33252a3d",
+    "code/c008_invoice_rounding/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c008_invoice_rounding/solution/src/invoice.py": "9b00c1ba58a49e4a7bb9a0b262d0abcd455ddfb3ec4760dcc14aa0800433142c",
+    "code/c008_invoice_rounding/src/invoice.py": "b8fe107effa0c9ea44484de8ac4074f9351597062224decbd71622c7831b0385",
+    "code/c008_invoice_rounding/task.yaml": "26d717bc88029d4a342eae1d9afffd77cc64dc2570e04334b76b2458499a82eb",
+    "code/c008_invoice_rounding/tests/test_invoice.py": "d37203d21fd831633644689a9cfae93b7ca23e330cb35ffd9ae727acda98ca4b",
+    "code/c009_csv_quotes/README.md": "382b47b950bacf3e9b6f785be8515ab1929614ab76880edf9057343db2ecb527",
+    "code/c009_csv_quotes/hidden_tests/test_hidden_csvrow.py": "f1c0cafa4b21a33e8448af9c684341b3f3bcd4ed2a3b8e97f7af3b53a2f4354e",
+    "code/c009_csv_quotes/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c009_csv_quotes/solution/src/csvrow.py": "dde86c930b41d51f52c92f6748646c200cb012dc655b1e4a9acc7a740da03f14",
+    "code/c009_csv_quotes/src/csvrow.py": "133d8007c1e118fc8a059f0477f4dec14bc911f8c2ea72b0ac467cb293f32349",
+    "code/c009_csv_quotes/task.yaml": "e483d5c3e1b80470b8bcc8b8879d1a1b568e0a8a46d308eb42540ac964633508",
+    "code/c009_csv_quotes/tests/test_csvrow.py": "0e5e806a1d9521ab9d2a9250da5e38e8b3d12f9017f0cea1a7ff4524120aadfa",
+    "code/c010_merge_intervals/README.md": "72aa18f600cca32ecb9a960db45580a2f30292a664d18106a55bd441d5820a84",
+    "code/c010_merge_intervals/hidden_tests/test_hidden_intervals.py": "cd91a8628146688eb74a4c2d31cebfe18ab5b01fdab09aca1d9c9224b9884a48",
+    "code/c010_merge_intervals/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/c010_merge_intervals/solution/src/intervals.py": "a5f5742b250df75f0d4164e122462c1f6612789ec39e20cd4d1d6a5540706a66",
+    "code/c010_merge_intervals/src/intervals.py": "640aafafb9ccaf5779d0d6f4a8617b5f942e0e80c35b6bb80eaba1ced6b92d54",
+    "code/c010_merge_intervals/task.yaml": "d6189e513888f5cf865a4615fd867cb8e9a893e51863a24f9b35073b94dab3d2",
+    "code/c010_merge_intervals/tests/test_intervals.py": "fe7298241288ac02f5ffb4fa45c6a6f6c28d787027e4c617726afd2283b32ab6",
+    "code/r001_humanize_naturalsize/LICENCE": "8ba6c18112a431400ad3c743f70670079b302545d98884fc2f28a91c383a0380",
+    "code/r001_humanize_naturalsize/README.md": "8096754d04d66877a1b12c9e78b3026e3efb28404daecdbed39184d369b5a7a2",
+    "code/r001_humanize_naturalsize/hidden_tests/test_hidden_filesize.py": "0605b868d79285fd3136e0e2b469354bcbfd6c74593165662e7cf30a60b9e0af",
+    "code/r001_humanize_naturalsize/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/r001_humanize_naturalsize/solution/src/humanize/filesize.py": "cb231d8ec30d11a5c30c39da8ee016b9028f07ed8babad3963a0d33b6b9f14af",
+    "code/r001_humanize_naturalsize/src/humanize/__init__.py": "01527f3081f4c363fa1140c58d0d9c73a34e8e85003c3920162834736738152f",
+    "code/r001_humanize_naturalsize/src/humanize/filesize.py": "1895d6dad77e0e87089417d1a76a5d40abc0cb6bfc23be5d1ae46c865e50bd20",
+    "code/r001_humanize_naturalsize/src/humanize/i18n.py": "59437bd22945d6f921dbbd54afb37baff1d54d72d9f9763ceb63f80a325ed911",
+    "code/r001_humanize_naturalsize/task.yaml": "f806deb70e1afe17905884af2f03784bfc3389e2fbf1b00b369202ddc2b906e7",
+    "code/r001_humanize_naturalsize/tests/test_naturalsize.py": "38ad73319b6ea79e490d9457e857cfbee1453c0444233dfe0b3eb9d2e7fa6d40",
+    "code/r002_more_itertools_numeric_range/LICENSE": "09f1c8c9e941af3e584d59641ea9b87d83c0cb0fd007eb5ef391a7e2643c1a46",
+    "code/r002_more_itertools_numeric_range/README.md": "107f678f02ae7ef8d04cb48c1413206923480f6ba23438e8102d228df48c5052",
+    "code/r002_more_itertools_numeric_range/hidden_tests/test_hidden_numeric_range.py": "38a6f9f4bfe6d49ac49c6097c87524b7b68d8cbe985af1fb21419cea913efda7",
+    "code/r002_more_itertools_numeric_range/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/r002_more_itertools_numeric_range/solution/src/more_itertools/more.py": "2614bde4837d2e83760be566530ffab7c366e417195505d2a5b6d103a781d3f5",
+    "code/r002_more_itertools_numeric_range/src/more_itertools/__init__.py": "896e68ecbfa388b3d3bd05dd499d511ecc2cb6906ba06a0d8e0bee35fe2f5f59",
+    "code/r002_more_itertools_numeric_range/src/more_itertools/more.py": "adeb6debedc7f0e1a1888c704b3bd4e6d33aeb0de762b55eff3cf91e1f4132e5",
+    "code/r002_more_itertools_numeric_range/task.yaml": "f7e345e33a8b01aed3b1687d7480850dac811e01622691d174971ccac8faea88",
+    "code/r002_more_itertools_numeric_range/tests/test_numeric_range.py": "b63fed4aab8f29326be507ba258b4edbeb59e7a570f9566186d9f5afd45e4de8",
+    "code/r003_boltons_daterange/LICENSE": "617273daf4b7b4fbc0e3068bca7df3e3dbc29b4c5641e185917c775cf1795111",
+    "code/r003_boltons_daterange/README.md": "8fac838786732a65e888e28f975fec44e44c2a66a285562932a0c2a7fa92f3a1",
+    "code/r003_boltons_daterange/hidden_tests/test_hidden_timeutils.py": "3c527ddf81f57d01967730a819d95a99337b121d5ab2fc804b5f543397a5f2a4",
+    "code/r003_boltons_daterange/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/r003_boltons_daterange/solution/src/boltons/timeutils.py": "6711984421031cb31c8cce63acf7d2938b93ae6222d722a7582090dc73d8c9e6",
+    "code/r003_boltons_daterange/src/boltons/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "code/r003_boltons_daterange/src/boltons/timeutils.py": "9e2dca5739f97e89a05b9252bc61c66dfa905f96627cbe734ee9efc6165d972a",
+    "code/r003_boltons_daterange/task.yaml": "d3460d710c3a146c55f8191a0b49936a19ead191ab4eaa78838b21b6b37f4008",
+    "code/r003_boltons_daterange/tests/test_daterange_steps.py": "ff50a798c3e9d5ddb8f27c67df5ba067c5e0fa4f791c97a0aea4ac87fe334b37",
+    "code/r004_humanize_fractional/LICENCE": "8ba6c18112a431400ad3c743f70670079b302545d98884fc2f28a91c383a0380",
+    "code/r004_humanize_fractional/README.md": "972046954f574699f688c79f2dcf234e8a1875bb5447becb4d4bb33ecd1f0bd6",
+    "code/r004_humanize_fractional/hidden_tests/test_hidden_number.py": "228ba94616c6e66bedfbebb55a0a372ce0a48ea145b29000c5176a4f45cee035",
+    "code/r004_humanize_fractional/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/r004_humanize_fractional/solution/src/humanize/number.py": "fd740651f8963aec2d7fa94de8fb5b631cbb90d9706e253696bf6ed072214411",
+    "code/r004_humanize_fractional/src/humanize/__init__.py": "41447a4dd10ffce8579d0851a3ed98cdf8a78791243e9309f9da95cf81ab014a",
+    "code/r004_humanize_fractional/src/humanize/i18n.py": "59437bd22945d6f921dbbd54afb37baff1d54d72d9f9763ceb63f80a325ed911",
+    "code/r004_humanize_fractional/src/humanize/number.py": "4b168dca2d32f0957fe5507dd8f674ebab5eefa146f2999806728f237f88c2c8",
+    "code/r004_humanize_fractional/task.yaml": "e05119c0ebf5416c3a1c9544c2f3b4a2a35aa5ea3dee60d718f7481ab140b083",
+    "code/r004_humanize_fractional/tests/test_fractional.py": "8b0d2a0447999543c635ffb364f6dff2287a1b1f78d91ac99b07158ebb9a35ba",
+    "code/r005_cachetools_getsizeof/LICENSE": "28c000b52b0ee27138a68ef778227e4057046e86b65f62f1cacb99b0cc49e0d2",
+    "code/r005_cachetools_getsizeof/README.md": "4161f98d515609518943de39568abb0bf2ed347ea98b6a671a8f3e68cc1b79ff",
+    "code/r005_cachetools_getsizeof/hidden_tests/__init__.py": "12b98dd2e29bff7379933b2d24e6f5d37e2dd0cb341cf63cff7a729ac0cfd289",
+    "code/r005_cachetools_getsizeof/hidden_tests/test_cache.py": "9c16537825be5097a84d5ef2a0b7f9b1e3d8e0d099eeb6fae1f42a0ef4742d9d",
+    "code/r005_cachetools_getsizeof/hidden_tests/test_fifo.py": "743cae3904dacdedd6d42e4eeb0baca126af63c487feff91c6acbc07fe903ad9",
+    "code/r005_cachetools_getsizeof/hidden_tests/test_lfu.py": "a29317a167fadcfd78fc670a61ed3ac7b442367b7c04cf0f6b2469832ce3f191",
+    "code/r005_cachetools_getsizeof/hidden_tests/test_lru.py": "b7b308f90740c6c5ee201c35d4405f644c71baf7e129631fa4b5204ff0058ada",
+    "code/r005_cachetools_getsizeof/hidden_tests/test_rr.py": "1b9d5f22bb3d3489ff7f0d3c9da22465f9264d5f0199e1ecb70f2479a1494e62",
+    "code/r005_cachetools_getsizeof/hidden_tests/test_tlru.py": "ec76f70ee2704ac721bb1f1b3c66c00cf4fa59bce1c3e7353c3474a54b888bea",
+    "code/r005_cachetools_getsizeof/hidden_tests/test_ttl.py": "9b8574443ce2c58e3362aaae5cf14592b004676751ce5489f8b9d06fdf92cc93",
+    "code/r005_cachetools_getsizeof/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/r005_cachetools_getsizeof/solution/src/cachetools/__init__.py": "dadbdcfdecb4c3b4c72999e0836ff1530acc892da3c6c869532545d39e5a8268",
+    "code/r005_cachetools_getsizeof/src/cachetools/__init__.py": "f2aac531b8c967e049645544af0a6d38130d9bec98d104afa323280a8f526d75",
+    "code/r005_cachetools_getsizeof/src/cachetools/_cached.py": "3f301c0cfbf6a108ca2ffca574568198164f9599439b595c859f6450a4da795b",
+    "code/r005_cachetools_getsizeof/src/cachetools/_cachedmethod.py": "ad2e75ebb6d3131225f36ce63c6f281700e675aff79ce2d447f8e97132b4ecb4",
+    "code/r005_cachetools_getsizeof/src/cachetools/keys.py": "9550bd6914744c2fc6fd211dfb83cdae2d6206b1a1bfcf052d017cb23b39b49e",
+    "code/r005_cachetools_getsizeof/task.yaml": "eb8bec35e059b672d0ae5137f1f021a6fc70d493466ea99dd67fd0f945729877",
+    "code/r005_cachetools_getsizeof/tests/test_cache_growing.py": "18c495bff764c24f5a7dbddba6ee95f93074fc2c52198b7fc06543ac4a8dc428",
+    "code/r006_boltons_indexedset/LICENSE": "617273daf4b7b4fbc0e3068bca7df3e3dbc29b4c5641e185917c775cf1795111",
+    "code/r006_boltons_indexedset/README.md": "2ab59086cb317ee699cfb04456a539bed06e8461e50c5cbc23adfc34bdbf2f4f",
+    "code/r006_boltons_indexedset/hidden_tests/test_hidden_setutils.py": "7ee0556d41845b3d533658650d60a2fde70b52fd42f0a85abd494d6a5b74f530",
+    "code/r006_boltons_indexedset/pytest.ini": "256be48cf04b01a6811295c8c5cf5833f682e8a98e9bb67661b3409bac608907",
+    "code/r006_boltons_indexedset/solution/src/boltons/setutils.py": "6f769deb50e40210887c7a90300ccdce6722ecde7a2dd66be17a62c777c5b28b",
+    "code/r006_boltons_indexedset/src/boltons/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "code/r006_boltons_indexedset/src/boltons/setutils.py": "be02f4956128055328b0c32dbd819353692a61d56896a3541203879979d78568",
+    "code/r006_boltons_indexedset/src/boltons/typeutils.py": "4da2b26d71386ee9010dfb52104e461ecba486ba5544a8cf50d9e26cd34e9c09",
+    "code/r006_boltons_indexedset/task.yaml": "5e37a952e87459c4af820700bf90500a5a2dd0350304e24260fca5a02b98317a",
+    "code/r006_boltons_indexedset/tests/test_indexedset_indexing.py": "405cb31517df02c2d1bf898d9219a83688a627d4542525cd67e2aa9280a008f1",
+    "datasets/saas/README.md": "4f7c061dfa0cac3f6e298f0283284483e219b6b6761380be4e5e490bb0ccc5aa",
+    "datasets/saas/generate.py": "d47f63a32ecfb165ba6c75ab1fa9629da62b403528ad52019045523874186c6a",
+    "datasets/saas/schema.sql": "66d230c0023479e4effb8b63500be81bca93a81b09040f779f8d1ddd41b7a3f7",
+    "datasets/store/README.md": "604039809b89b1f7803ec598a98b30c4b8a4fd1edfe15a65efff73b8338c71a4",
+    "datasets/store/generate.py": "184fcb61bd5bc1cf6c5c77eae4ebbc87b9cec11a29be92876971fb8377b12a7c",
+    "datasets/store/schema.sql": "47fe77ff592fa894e798c2c1b573de04eb7f0f53ffa296c64840912d53f876fc",
+    "sql/s001_revenue_by_plan/README.md": "f659d4a7b4a0fc4ae536385f89e62910565ff784eee65cca7d2a8f8e4f5a5ad8",
+    "sql/s001_revenue_by_plan/solution.sql": "943f02349f581fcb467e8b2b158b501797554f5f5d1f1e92196ba37973f24292",
+    "sql/s001_revenue_by_plan/solution/solution.sql": "be141b71509df5c4ea4626c8793e194d427ea6fe4459c88a66d14deb91693ac5",
+    "sql/s001_revenue_by_plan/task.yaml": "33a7bc3cfc09003cd0e94e0c1f06c4d52a3c85c138f1bddfbc8aea9c7331e4a2",
+    "sql/s002_monthly_revenue/README.md": "bae1f6149d71642f649bb4e0a3887ab7bfd2eee1e8ce6516dbb0698fdea5dad6",
+    "sql/s002_monthly_revenue/solution.sql": "d95209e8cd45818515feacbab00070aa9a33fc6223286255616b099ed131da69",
+    "sql/s002_monthly_revenue/solution/solution.sql": "7951472d8700115807c88e2ec26fc473282b09de902821c9bfc865b94372636f",
+    "sql/s002_monthly_revenue/task.yaml": "94a431a55903d6714fde83e3802805c985f4d61ae8a6b84c4871dfe20ceec3eb",
+    "sql/s003_unknown_country/README.md": "606dd56b1c797f532d15eec247f9b071b7809778d86648aaf4f7c36ac87a8b8a",
+    "sql/s003_unknown_country/solution.sql": "645e02d1ec6cc73ebffcaed516d796ae56850d8f3aa2d9e43dbedd78f2938420",
+    "sql/s003_unknown_country/solution/solution.sql": "c84d2c38961523086c88ba2d639cb705800b64f50e393c25eff7bb50494e2b65",
+    "sql/s003_unknown_country/task.yaml": "878f962fd9d1268b0ce7c926a18db720d9abf6ff764760a497896b6021234544",
+    "sql/s004_big_spenders/README.md": "26c08ffbe284b3933a056384ac9aca7f4a6273d15405a74a934f7ea361c93c1d",
+    "sql/s004_big_spenders/solution.sql": "0dbfc2ee907be7e0c3c4ad9b9bb417b147b74f04d2b286b520d6da4a273bb2ce",
+    "sql/s004_big_spenders/solution/solution.sql": "fc9a81aa87427736179997d90157bd918777b19ec1d2c46531d2f3fb76538397",
+    "sql/s004_big_spenders/task.yaml": "d06297e442b153bc839c8cab91b33f641f6372108ab43214f59b9330d8120148",
+    "sql/s005_plan_revenue_de/README.md": "28c868f5d67567515c0d387a21712908fd82a13a6e8916a6254114a4c6cfceb7",
+    "sql/s005_plan_revenue_de/solution.sql": "9ac2c5f71223ad81f8ded9c23d810577858000110cf53636ff01a37db30ce61e",
+    "sql/s005_plan_revenue_de/solution/solution.sql": "0a24d54a2cd63eaa2ba1e167409ed88406679f735e51a98fd916863889faa09f",
+    "sql/s005_plan_revenue_de/task.yaml": "6908a51b39536f8359d4723e6f9d48652cfc891073bcf8c4f3657915b5527677",
+    "sql/s006_mrr_by_plan/README.md": "7128cb5df9c5584cd584f82f7f4e45617410e9b4466d1edbd381a3b7fab8f1ef",
+    "sql/s006_mrr_by_plan/solution.sql": "eba225680402023e981bbefa401c1df0c6dbdd2cee054e5ec837946b242118ab",
+    "sql/s006_mrr_by_plan/solution/solution.sql": "cabedc546eae13452e3e2a275184b1f6b03ee6bceb991915fcc3bc2f0122e795",
+    "sql/s006_mrr_by_plan/task.yaml": "0c69ce08f40f3b593f0da84f5ad97a97eb0376c3aa8216595ce160d564f4d52d",
+    "sql/s007_latest_plan/README.md": "8c7456bb7a7d05a08e197a45ffe9e5636818be05cf4cc16aa40b70c9b926c38c",
+    "sql/s007_latest_plan/solution.sql": "58761376d8bb49bea35276459000fc3fc8e262afbae3d20b4fef049d19ee6e88",
+    "sql/s007_latest_plan/solution/solution.sql": "6e834f8b3f33f2ba9c959f0865f6f9a1383ee0797f20472c0ced0531d89f13ad",
+    "sql/s007_latest_plan/task.yaml": "43a4bd0fa55b4be2813980899fe2d2da302c358893b215d5b3cc726dfc45f03d",
+    "sql/s008_monthly_churn/README.md": "567d81861a32e2362e8c0c179cf7987d41470f4e03690f18a059bd97e1b9f9c3",
+    "sql/s008_monthly_churn/solution.sql": "c0d629f2647cd69525588b84afde5b854849f10aeb9c5a2210ac3f58c315c350",
+    "sql/s008_monthly_churn/solution/solution.sql": "335b113667433b0ba839ef4b6a944544913a9f71bdad8bcc6df2d50de72216e0",
+    "sql/s008_monthly_churn/task.yaml": "d241dbad4659cabb67ad6336d696b00c4b7ef72627137d002d257770c522683a",
+    "sql/s009_orders_per_customer/README.md": "f6ebe0ee5b585ad4655533f906fbcd4d68e60ad7b8e870072440ae9f0c4c6840",
+    "sql/s009_orders_per_customer/solution.sql": "7f0a1065cfaa1aec1e740a29751efb9c76543c05306cda16f99b666b05bf5101",
+    "sql/s009_orders_per_customer/solution/solution.sql": "1655855b09634c1b788ac9a276093462b8ac3a04add7e0313de30c24e50eaed6",
+    "sql/s009_orders_per_customer/task.yaml": "0daf0e3a402db0d73ce53883754182b136bbcbde79093fca5cf5211a2695c7eb",
+    "sql/s010_net_revenue/README.md": "06e14763903e09d69556f1e89293f1c93e1efd6563b402a2ca901f57b1583004",
+    "sql/s010_net_revenue/solution.sql": "6832c5fc76a1aa15ead6bfc2bdc8f83bd108f9e22d9127646a4f451dee8b7af6",
+    "sql/s010_net_revenue/solution/solution.sql": "c24ab2a91ac04acece6a29cf0add06f5c0e1e5c2e44ba3103f1232a622641648",
+    "sql/s010_net_revenue/task.yaml": "373927ba1a2d3b31bafa1c61bdf9b969e54f83fb98a9036fc035052059e75aad",
+    "sql/s011_return_rate/README.md": "324b6cac2ee0f5bbb4f47dea0499194d9c1597fda94b3d876a4e0282d790237e",
+    "sql/s011_return_rate/solution.sql": "6d5cfc79677d3ba44f6af69e6eb46fe21f27fa3966b4d2adf7e26b92265cf49e",
+    "sql/s011_return_rate/solution/solution.sql": "4ff354fa14b5d15b27f025fcc3d826141d032f1b596033d7dc951fe4ccd466b1",
+    "sql/s011_return_rate/task.yaml": "645622cc008ce9185c66d64fa048544c2245e84563d1e01cb174f567d7949d02",
+    "sql/s012_top_products/README.md": "3d19b070342d268b6b246a790d5afb49c10b404954ab3684d184e7f5ed023792",
+    "sql/s012_top_products/solution.sql": "d25bd0a84a8cc2570ddde014085f3074d5cf42f7e57acbd1520ef9435c41f385",
+    "sql/s012_top_products/solution/solution.sql": "3ceba32da0060953dc5af15087f520800fb825ffbc766af6e48956f00ed5215e",
+    "sql/s012_top_products/task.yaml": "28a274830e5283ad7b22bf5096e7a2b3602ae37f4211d1dd5398d5d035378a2a",
+    "sql/s013_monthly_growth/README.md": "32774386fdd84f6ef4c088a9471749467f7ef6083060cad56499685dce18c201",
+    "sql/s013_monthly_growth/solution.sql": "542361e9c39806a194a69dbba43e6349aa3453c067917579a47871cd7277a1b2",
+    "sql/s013_monthly_growth/solution/solution.sql": "93957a544677155f5557a9572fb665e21dc6de51d51a6619898c586efe25694b",
+    "sql/s013_monthly_growth/task.yaml": "1febab1936985f5a1d3ab3e4e9651a7f52f95251ecbf66edbcbd758d5c1af0c2",
+    "sql/s014_order_status/README.md": "0f418787fd7a9486cef4d5249d90c468aaff3a2102132ebac690ee17f40119fc",
+    "sql/s014_order_status/solution.sql": "f517e0e134657f2b06d85d1dd253fd0e221fdafe5d71d12e94bc5d59507fe9e2",
+    "sql/s014_order_status/solution/solution.sql": "292a7432a5a8a5de7aaa96f15ca7336456f9d3c9a8c0e3022a3fbbcd65a1dcec",
+    "sql/s014_order_status/task.yaml": "91d0b9713a5af526047d6b1f789ded7b93a6bb2f28d61b9128d3d790ab10043a"
+  }
+}

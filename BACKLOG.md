@@ -6,11 +6,10 @@ the engineering list.
 
 ## Measurement topic
 
-- **Run fingerprint in summary.json.** Record hashes of the task files, the Docker image
-  digest, the prompt version and the limits, so two runs can be proven to use identical
-  settings (the Measurement rule). Hash file contents with line endings normalised (or
-  hash the git blobs), so the same tasks give the same fingerprint on every machine;
-  .gitattributes now keeps LF in working copies, but a fingerprint shouldn't depend on it.
+- **Run fingerprint in summary.json.** Record the Docker image digest, the prompt version,
+  the model and the limits alongside the task freeze fingerprint (recorded since Topic 8,
+  with line endings normalised), so two runs can be proven to use identical settings (the
+  Measurement rule).
 - **Record pacing waits per task and per run.** Token-aware pacing replaced the 429s (0 in
   the Topic 7 smoke run) with up-front waits, which nothing records. Count them and their
   seconds in each result and summary.json, so a slow run can be put down to the model or
@@ -20,12 +19,6 @@ the engineering list.
   official run, not just crashes: Groq's free tier allows 200,000 tokens per day (rolling
   24 hours), and one full 30-task run uses about 600,000, so an official run has to be
   spread over about three days (the calibration ran as three chunks under three run ids).
-
-## Full-suite topic
-
-- **Held-out tasks.** Every task is `split: dev` so far. Official results need held-out
-  tasks the prompt was never tuned on, and runs should report the dev and held-out splits
-  separately.
 
 ## Polish topic
 
@@ -80,6 +73,9 @@ the engineering list.
 
 ## Done in Topic 8 (the full suite)
 
+- **Held-out tasks.** Done (step 8.8): 18 dev and 12 held-out tasks, balanced by kind,
+  source and difficulty; runs report totals per split as well as overall. The suite is
+  frozen (FREEZE.md, suites/manifest.json) and `akeso run` refuses modified tasks.
 - **Anthropic provider, with prompt caching.** Done (pulled forward for calibration):
   the native SDK behind the same Provider interface, a cache breakpoint on the system
   prompt (which caches the tool definitions too), cache writes and reads priced
