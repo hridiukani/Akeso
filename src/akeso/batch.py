@@ -47,6 +47,7 @@ def run_tasks(
     environment_factory: EnvironmentFactory = DockerSandbox,
     tasks_root: str | Path = DEFAULT_TASKS_ROOT,
     on_result: Callable[[AgentResult], None] | None = None,
+    freeze: dict[str, Any] | None = None,
 ) -> RunSummary:
     """Run each task in turn and write the run folder. A task that crashes is recorded
     as an error result rather than stopping the run."""
@@ -75,7 +76,7 @@ def run_tasks(
         results.append(result)
         if on_result:
             on_result(result)
-        _write_summary(run_dir, run_id, started, settings, limits, results, splits)
+        _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze)
 
     return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits))
 
@@ -119,6 +120,7 @@ def read_summary(run_dir: str | Path) -> dict[str, Any]:
 def _write_summary(
     run_dir: Path, run_id: str, started: str, settings: Settings, limits: AgentLimits, results: list[AgentResult],
     splits: Mapping[str, str],
+    freeze: dict[str, Any] | None = None,
 ) -> None:
     summary = {
         "run_id": run_id,
@@ -127,6 +129,8 @@ def _write_summary(
         "provider": settings.provider,
         "model": settings.model,
         "prompt_version": AGENT_PROMPT_VERSION,
+        # How the run's tasks compared with the freeze manifest (None when not checked).
+        "freeze": freeze,
         "limits": asdict(limits),
         "totals": summarize(results, splits),
         "results": [{**asdict(r), "split": splits.get(r.task_id)} for r in results],

@@ -1,7 +1,8 @@
 """The `akeso` command-line tool.
 
-    akeso run --suite smoke [--model M] [--max-steps N] [--max-cost USD] [--run-id ID]
+    akeso run --suite smoke [--model M] [--max-steps N] [--max-cost USD] [--run-id ID] [--allow-modified]
     akeso validate [--suite smoke]
+    akeso freeze
     akeso trace RUN_ID TASK_ID [--full]
     akeso cleanup [--all]
 """
@@ -21,6 +22,7 @@ from rich.table import Table
 
 from akeso.batch import run_tasks
 from akeso.config import PRICES, ConfigError, Settings, load_settings
+from akeso.freeze import DEFAULT_MANIFEST, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest
 from akeso.grading import Verdict
 from akeso.sandbox import LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers
 from akeso.suites import SuiteError, load_suite
@@ -54,7 +56,7 @@ def _friendly_errors(command: Callable[..., Any]) -> Callable[..., Any]:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return command(*args, **kwargs)
-        except (ConfigError, SuiteError, TaskError, SandboxError) as problem:
+        except (ConfigError, SuiteError, TaskError, SandboxError, FreezeError) as problem:
             console.print(f"[red]Error:[/red] {problem}")
             raise typer.Exit(code=1) from None
 
@@ -77,11 +79,23 @@ def run(
     max_steps: Optional[int] = typer.Option(None, "--max-steps", min=1, help="Maximum model calls per task."),
     max_cost: Optional[float] = typer.Option(None, "--max-cost", min=0.0, help="Maximum cost per task, in dollars."),
     run_id: Optional[str] = typer.Option(None, "--run-id", help="Name for the run folder (default: timestamp)."),
+    allow_modified: bool = typer.Option(
+        False, "--allow-modified", help="Run even if task files changed since the freeze (recorded in the results)."),
 ) -> None:
     """Run the agent on every task in a suite and print the results."""
     task_ids = load_suite(suite)
-    for task_id in task_ids:
-        find_task(task_id)  # report a bad suite before spending anything
+    tasks = [find_task(task_id) for task_id in task_ids]  # report a bad suite before spending anything
+    check = check_tasks(tasks, read_manifest())
+    if not check.ok and not allow_modified:
+        listed = "\n  ".join(check.modified[:20]) + ("\n  ..." if len(check.modified) > 20 else "")
+        console.print(f"[red]Error:[/red] {len(check.modified)} task file(s) changed since the freeze "
+                      f"({DEFAULT_MANIFEST}):\n  {listed}\nTasks are frozen (see FREEZE.md). "
+                      "Pass --allow-modified to run anyway; the run's results will record it.", highlight=False)
+        raise typer.Exit(code=1)
+    if not check.ok:
+        console.print(f"[yellow]Warning:[/yellow] running with {len(check.modified)} task file(s) changed since the freeze.")
+    freeze = {"manifest_fingerprint": check.manifest_fingerprint, "allow_modified": allow_modified,
+              "modified_files": check.modified}
     settings = load_settings()
     if model:
         settings = _with_model(settings, model)
@@ -93,7 +107,7 @@ def run(
 
     console.print(f"Running suite [bold]{suite}[/bold] ({len(task_ids)} tasks) on {settings.provider} / {settings.model}")
     summary = run_tasks(
-        task_ids, run_id=run_id, settings=settings, limits=limits,
+        task_ids, run_id=run_id, settings=settings, limits=limits, freeze=freeze,
         on_result=lambda r: console.print(f"  {r.task_id}: [{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]"),
     )
 
@@ -140,6 +154,15 @@ def validate(
     console.print(format_report(results), highlight=False)
     if not all(r.ok for r in results):
         raise typer.Exit(code=1)
+
+
+@app.command()
+def freeze() -> None:
+    """Write the freeze manifest: a fingerprint of every task and dataset file (see FREEZE.md)."""
+    manifest = build_manifest()
+    write_manifest(manifest)
+    console.print(f"Froze {len(manifest['tasks'])} tasks ({len(manifest['files'])} files) into {DEFAULT_MANIFEST}. "
+                  f"Fingerprint: {manifest['fingerprint']}")
 
 
 @app.command()

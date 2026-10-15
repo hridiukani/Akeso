@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 from akeso import cli
 from akeso.agent import AgentResult, StopReason
 from akeso.batch import RunSummary, summarize
+from akeso.freeze import FreezeCheck, read_manifest
 from akeso.config import Settings
 from akeso.grading import Verdict
 from akeso.suites import SuiteError, load_suite
@@ -49,6 +50,8 @@ def fake_run(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
     monkeypatch.setattr(cli, "load_settings", lambda: SETTINGS)
+    monkeypatch.setattr(cli, "read_manifest", lambda: {})
+    monkeypatch.setattr(cli, "check_tasks", lambda tasks, manifest: calls.get("freeze_check", FreezeCheck("fp-123")))
     monkeypatch.setattr(cli, "load_suite", fixed_suite)
     return calls
 
@@ -159,3 +162,41 @@ def test_bad_suite_files(tmp_path: Path, content: str, message: str) -> None:
 
     with pytest.raises(SuiteError, match=message.replace("[", r"\[")):
         load_suite("bad", suites_dir=tmp_path)
+
+
+def test_run_records_a_clean_freeze_check(fake_run) -> None:
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["freeze"] == {"manifest_fingerprint": "fp-123", "allow_modified": False, "modified_files": []}
+
+
+def test_run_refuses_modified_tasks(fake_run) -> None:
+    fake_run["freeze_check"] = FreezeCheck("fp-123", modified=["code/c001_mean/src/stats.py"])
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 1
+    assert "1 task file(s) changed since the freeze" in out.output and "code/c001_mean/src/stats.py" in out.output
+    assert "--allow-modified" in out.output
+    assert "task_ids" not in fake_run  # nothing ran
+
+
+def test_allow_modified_runs_and_is_recorded(fake_run) -> None:
+    fake_run["freeze_check"] = FreezeCheck("fp-123", modified=["code/c001_mean/src/stats.py"])
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--allow-modified"])
+
+    assert out.exit_code == 0, out.output
+    assert "running with 1 task file(s) changed since the freeze" in out.output
+    assert fake_run["freeze"] == {"manifest_fingerprint": "fp-123", "allow_modified": True,
+                                  "modified_files": ["code/c001_mean/src/stats.py"]}
+
+
+def test_run_without_a_manifest_is_a_clear_error(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(cli, "load_suite", fixed_suite)
+    monkeypatch.setattr(cli, "read_manifest", lambda: read_manifest(tmp_path / "manifest.json"))
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 1 and "No freeze manifest" in out.output
