@@ -1,0 +1,19 @@
+# Development split (18 tasks): use freely while building and tuning.
+- c001_mean
+- c002_shipping
+- c003_discount
+- c006_shipping_weight
+- c008_invoice_rounding
+- c010_merge_intervals
+- r001_humanize_naturalsize
+- r002_more_itertools_numeric_range
+- r004_humanize_fractional
+- r006_boltons_indexedset
+- s001_revenue_by_plan
+- s002_monthly_revenue
+- s005_plan_revenue_de
+- s006_mrr_by_plan
+- s007_latest_plan
+- s010_net_revenue
+- s011_return_rate
+- s012_top_products

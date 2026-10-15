@@ -5,7 +5,7 @@ description: >
   instead of HAVING SUM(p.amount) > 500 on each customer's total. Customers with many
   smaller payments are missed, and big payers' totals leave out their smaller payments.
 editable_paths: [solution.sql]
-split: dev
+split: heldout
 difficulty: medium
 tags: [where-vs-having, aggregation]
 sql:

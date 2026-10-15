@@ -6,7 +6,7 @@ description: >
   before the gap. It needs a generated calendar of all 12 months with 0 orders for the
   empty one, and no growth (NULL) when the previous month had 0.
 editable_paths: [solution.sql]
-split: dev
+split: heldout
 difficulty: hard
 tags: [missing-periods, calendar-table, lag]
 sql:

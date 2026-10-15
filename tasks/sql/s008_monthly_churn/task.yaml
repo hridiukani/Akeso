@@ -6,7 +6,7 @@ description: >
   a subscription ending on the first of the month as active that day (>= instead of >).
   Churn must be decided per customer: still active on the first day of next month?
 editable_paths: [solution.sql]
-split: dev
+split: heldout
 difficulty: hard
 tags: [multi-step, customer-vs-subscription, date-boundary]
 sql:

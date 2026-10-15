@@ -4,6 +4,6 @@ description: is_leap_year() is missing the divisible-by-400 rule, so 2000 isn't 
 editable_paths: [src/]
 hidden_tests_dir: hidden_tests
 solution_dir: solution
-split: dev
+split: heldout
 difficulty: medium
 tags: [boolean-logic, regression-guard, single-file]

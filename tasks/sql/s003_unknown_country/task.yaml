@@ -4,7 +4,7 @@ description: >
   Counts customers with an unknown country using country = NULL, which is never true in
   SQL (comparing with NULL gives NULL), so the result is empty. It needs IS NULL.
 editable_paths: [solution.sql]
-split: dev
+split: heldout
 difficulty: easy
 tags: [null-comparison, filtering]
 sql:

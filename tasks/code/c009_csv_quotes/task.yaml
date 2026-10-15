@@ -7,7 +7,7 @@ description: >
 editable_paths: [src/]
 hidden_tests_dir: hidden_tests
 solution_dir: solution
-split: dev
+split: heldout
 difficulty: medium
 tags: [parsing, state-machine, escaping, regression-guard]
 # Overfitting: hidden rows put escaped quotes at the start and end of fields, in

@@ -1,0 +1,13 @@
+# Held-out split (12 tasks): never used for tuning; run only for official results.
+- c004_duration
+- c005_calendar
+- c007_search_keywords
+- c009_csv_quotes
+- r003_boltons_daterange
+- r005_cachetools_getsizeof
+- s003_unknown_country
+- s004_big_spenders
+- s008_monthly_churn
+- s009_orders_per_customer
+- s013_monthly_growth
+- s014_order_status

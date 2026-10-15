@@ -4,7 +4,7 @@ description: >
   Joins orders to order_items to sum the amount spent, then counts rows with COUNT(*),
   which counts order lines, not orders: an order with three products counts three times.
 editable_paths: [solution.sql]
-split: dev
+split: heldout
 difficulty: easy
 tags: [join-fan-out, count-distinct]
 sql:
