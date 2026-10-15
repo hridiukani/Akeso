@@ -67,4 +67,4 @@ LEARNING.md is for me, preparing to explain Akeso to two audiences: a non-techni
 - typer and rich for the CLI (later)
 
 ## Measurement rule
-Groq is for development and debugging only. All reported numbers (baseline, experiments, held-out results) must come from the Anthropic model, run with identical settings. Never compare results from different providers or models as if they were the same experiment.
+The measurement model for the MVP is Groq's `openai/gpt-oss-120b` (PROVIDER=groq, GROQ_MODEL=openai/gpt-oss-120b). All official numbers (baseline, experiments, held-out results) come from this exact model with identical settings. If we switch measurement models later, every official measurement must be rerun on the new model. Results from different providers or models are never compared as if they were the same experiment.
