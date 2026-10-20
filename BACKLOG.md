@@ -6,22 +6,34 @@ the engineering list.
 
 ## Measurement topic
 
-- **Run fingerprint in summary.json.** Record the Docker image digest, the prompt version,
-  the model and the limits alongside the task freeze fingerprint (recorded since Topic 8,
-  with line endings normalised), so two runs can be proven to use identical settings (the
-  Measurement rule).
+- **`akeso run --resume`.** Rerun only the missing, crashed or quota-stopped tasks in an
+  existing run folder, instead of starting a long suite again. On the free tier it's what
+  lets a full run (about 600,000 tokens) be spread over the 200,000-tokens-a-day limit
+  (the calibration ran as three chunks under three run ids by hand); on the Developer tier
+  it's still what saves a long official run after a crash or an outage.
+- **Stop cleanly when the quota runs out.** A daily-cap 429 says "try again in 13
+  minutes", but each remaining task retries for about 2 minutes and then errors (17 tasks
+  in the first calibration run). Stop the run instead, record the remaining tasks as not
+  run (not as failures), and let `--resume` pick them up.
+- **Run fingerprint in summary.json.** Record everything that makes two runs comparable
+  under the Measurement rule: the provider, the Groq tier (free or Developer), the exact
+  model, the reasoning effort (not set today, so Groq's default for gpt-oss-120b), the
+  prompt version, the limits and the Docker image digest, alongside the task freeze
+  fingerprint (recorded since Topic 8, with line endings normalised).
 - **Record pacing waits per task and per run.** Token-aware pacing replaced the 429s (0 in
   the Topic 7 smoke run) with up-front waits, which nothing records. Count them and their
   seconds in each result and summary.json, so a slow run can be put down to the model or
   to the quota.
-- **`akeso run --resume`.** Rerun only the missing or crashed tasks in an existing run
-  folder, instead of starting a long suite again after a crash. Now needed for every
-  official run, not just crashes: Groq's free tier allows 200,000 tokens per day (rolling
-  24 hours), and one full 30-task run uses about 600,000, so an official run has to be
-  spread over about three days (the calibration ran as three chunks under three run ids).
 
 ## Polish topic
 
+- **`akeso doctor`.** One command that checks what a long run needs before it starts:
+  Docker running (Docker Desktop stopped between sessions three times in Topic 8), the
+  sandbox image built, the freeze manifest present and matching, the active provider's key
+  and model set, and which Groq tier the key is on.
+- **Update README.md.** It doesn't mention SQL tasks, that they need Docker (local mode
+  refuses them), the query runner, the sqlglot dependency, the two datasets, the dev and
+  held-out split, `akeso freeze` and `--allow-modified`, or the free versus Developer tier.
 - **Stronger code-tampering checks.** Check imports by parsing the code (Python's `ast`)
   rather than with a text pattern, so imports assembled at runtime are caught, and flag
   source that inspects running modules (`sys.modules`) or reads test files. These are the
@@ -36,23 +48,34 @@ the engineering list.
   `json_each` does too. The hidden database makes both fail, but they aren't labelled
   tampering. Flag results made only of literals with no aggregate, and long string literals
   passed to table-valued functions.
-- **Update README.md for SQL tasks.** It doesn't mention SQL tasks, that they need Docker
-  (local mode refuses them), the query runner, or the sqlglot dependency.
 
-## Experiment candidates (don't implement before the baseline is measured)
+## Experiments (chosen after the baseline is measured)
 
-- **Verify-before-stop.** When the model stops calling tools and the checks aren't passing,
-  run them and send the failure back so the agent continues instead of ending. Evidence:
-  in run 20261007-215234-a20e17, c003 and c005 stopped without the model running checks.
+Which experiments to run is decided once the official baseline exists, from what it
+shows. The candidates so far:
+
 - **Trim conversation history.** The whole history is resent every step (input grew from
   1.4k to 2k tokens per call on c003). Shortening old tool outputs could cut cost, but may
-  change pass rate. Measure first. **The strongest candidate on Groq:** its free tier
-  refuses any single request over 8,000 tokens, which ended s010 (after 18 steps), r002
-  and r006 in the calibration (now stop reason provider_token_limit, counted as
-  failures). Trimming would let those tasks be attempted at all.
-- **"No progress" detection beyond checks.** Stop runs that repeat identical reads or edits
-  sooner (today only identical failing checks, max steps and tokens stop them). Stopping
-  earlier can also stop a run that would have recovered. Measure first.
+  change pass rate. Evidence from the free tier: its 8,000-token request limit ended s010
+  (after 18 steps), r002 and r006 in the calibration. The Developer tier removes that
+  limit, so on official runs the case rests on cost and context length; check the
+  baseline's token use per task first.
+- **Verify-before-stop.** When the model stops calling tools and the checks aren't passing,
+  run them and send the failure back so the agent continues instead of ending. Evidence:
+  in run 20261007-215234-a20e17, c003 and c005 stopped without the model running checks;
+  in the calibration, s008 gave up after a single failing check.
+
+A further idea, if the baseline points to it: **"no progress" detection beyond checks**
+(stop runs that repeat identical reads or edits sooner; today only identical failing
+checks, max steps and tokens stop them). Stopping earlier can also stop a run that would
+have recovered.
+
+## When the Anthropic provider is first used
+
+- **A live check before anything else.** It's built and tested offline only and has never
+  made a real API call. Its first use starts with one small request that confirms the
+  call works, that the cache breakpoint creates and then reads a cache entry, and that
+  thinking blocks are replayed in a two-step tool loop, before any run that matters.
 
 ## Unscheduled
 
