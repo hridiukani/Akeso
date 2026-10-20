@@ -58,7 +58,8 @@ def test_summary_file_has_results_and_totals(tasks_root: Path, tmp_path: Path) -
     assert by_split == {"dev": data["totals"]}  # both test tasks are dev
     assert data["totals"] == {
         "tasks": 2, "passed": 1, "failed": 1, "tampered": 0, "pass_rate": 0.5,
-        "average_steps": 1.5, "total_input_tokens": 300, "total_output_tokens": 60, "total_cost_usd": 0.0,
+        "average_steps": 1.5, "total_input_tokens": 300, "total_output_tokens": 60,
+        "total_cost_usd": pytest.approx(300 * 0.15e-6 + 60 * 0.60e-6),  # Groq Developer tier rates
         "total_rate_limit_retries": 0, "provider_token_limit": 0,
     }
     assert data["limits"]["max_steps"] == 20

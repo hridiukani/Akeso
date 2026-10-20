@@ -21,9 +21,16 @@ def test_zero_tokens_costs_nothing() -> None:
     assert cost_usd("claude-sonnet-5", Usage(input_tokens=0, output_tokens=0)) == 0.0
 
 
-@pytest.mark.parametrize("model", [m for m in PRICES if not m.startswith("claude-")])
-def test_groq_models_are_free(model: str) -> None:
+@pytest.mark.parametrize("model", [m for m in PRICES if not m.startswith("claude-") and m != "openai/gpt-oss-120b"])
+def test_free_tier_only_groq_models_are_free(model: str) -> None:
     assert cost_usd(model, Usage(input_tokens=10_000, output_tokens=10_000)) == 0.0
+
+
+def test_gpt_oss_120b_uses_groq_developer_tier_rates() -> None:
+    # $0.15 input, $0.075 cached input (50% off), $0.60 output per million tokens.
+    usage = Usage(input_tokens=2_000_000, output_tokens=1_000_000, cache_read_tokens=1_000_000)
+
+    assert cost_usd("openai/gpt-oss-120b", usage) == pytest.approx(0.15 + 0.075 + 0.60)
 
 
 def test_unknown_model_raises_with_model_name() -> None:

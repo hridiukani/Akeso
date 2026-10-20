@@ -41,11 +41,16 @@ class ModelPrice:
 # Keyed by the exact model name sent to the API. A model missing here makes cost
 # calculation fail loudly, so a run can't silently report $0.
 # Anthropic prices checked 2026-10-14 at https://platform.claude.com/docs/en/about-claude/pricing
-# (5-minute cache writes and cache reads included). Groq models are 0 because we use
-# Groq's free tier.
+# (5-minute cache writes and cache reads included).
+# Groq openai/gpt-oss-120b: Developer tier (on-demand) rates checked 2026-10-20 at
+# https://console.groq.com/docs/model/openai/gpt-oss-120b (groq.com/pricing doesn't list
+# them); cached input is 50% off (https://console.groq.com/docs/prompt-caching) and there
+# is no cache-write premium. Free-tier development runs are billed $0 by Groq, but they
+# report these Developer tier rates, so their cost is what an official run would cost.
+# The other Groq models are 0: we only use them on the free tier.
 PRICES: dict[str, ModelPrice] = {
-    # Groq (free tier)
-    "openai/gpt-oss-120b": ModelPrice(0.0, 0.0),
+    # Groq
+    "openai/gpt-oss-120b": ModelPrice(0.15, 0.60, cache_write_per_mtok=0.15, cache_read_per_mtok=0.075),
     "openai/gpt-oss-20b": ModelPrice(0.0, 0.0),
     "llama-3.3-70b-versatile": ModelPrice(0.0, 0.0),
     "llama-3.1-8b-instant": ModelPrice(0.0, 0.0),
