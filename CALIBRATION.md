@@ -8,7 +8,9 @@ to fix a genuinely broken task (see FREEZE.md).
 ## How it was run
 
 - **Model:** Groq `openai/gpt-oss-120b`, the MVP's measurement model (CLAUDE.md,
-  Measurement rule). Settings: prompt `agent-v4`, 20 steps, $1.00 and 300,000 tokens per
+  Measurement rule). Calibration ran on Groq's **free tier**, whose 8,000-token
+  per-request limit affected r002, r006 and s010; official runs on the Developer tier
+  won't have that limit. Settings: prompt `agent-v4`, 20 steps, $1.00 and 300,000 tokens per
   task, stop after 3 identical failing checks.
 - **Runs:** `calibration-1` (2026-10-09), `calibration-2` (2026-10-12) and `calibration-3`
   (2026-10-13). Groq's free tier allows 200,000 tokens per day, rolling over 24 hours, and
