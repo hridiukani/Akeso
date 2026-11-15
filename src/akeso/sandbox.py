@@ -243,6 +243,16 @@ class DockerSandbox:
         self.stop()
 
 
+def image_digest(image: str = IMAGE) -> str:
+    """The sandbox image's ID (a sha256 digest of its contents), for the run fingerprint."""
+    try:
+        return _connect().images.get(image).id
+    except ImageNotFound:
+        raise SandboxError(
+            f"Docker image {image!r} not found. Build it with: python scripts/build_images.py"
+        ) from None
+
+
 def cleanup_leftover_containers(max_age: timedelta | None = LEFTOVER_MAX_AGE) -> list[str]:
     """Remove our labelled containers older than max_age; return their short ids.
 

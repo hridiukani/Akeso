@@ -21,7 +21,8 @@ from akeso.config import AgentLimits, Settings, load_settings
 from akeso.grading import Verdict
 from akeso.llm.provider import Provider, get_provider
 from akeso.prompts import AGENT_PROMPT_VERSION
-from akeso.sandbox import DockerSandbox, cleanup_leftover_containers
+from akeso import fingerprint as run_fingerprint
+from akeso.sandbox import DockerSandbox, cleanup_leftover_containers, image_digest
 from akeso.tasks import DEFAULT_TASKS_ROOT, find_task
 from akeso.trace import DEFAULT_TRACE_DIR, new_run_id
 
@@ -48,6 +49,7 @@ def run_tasks(
     tasks_root: str | Path = DEFAULT_TASKS_ROOT,
     on_result: Callable[[AgentResult], None] | None = None,
     freeze: dict[str, Any] | None = None,
+    fingerprint: dict[str, Any] | None = None,
 ) -> RunSummary:
     """Run each task in turn and write the run folder. A task that crashes is recorded
     as an error result rather than stopping the run."""
@@ -62,6 +64,9 @@ def run_tasks(
     if environment_factory is DockerSandbox:
         # Containers more than an hour old are leftovers from crashed runs, never this one.
         cleanup_leftover_containers()
+    if fingerprint is None:
+        docker_image = image_digest() if environment_factory is DockerSandbox else None
+        fingerprint = run_fingerprint.collect(settings, limits, docker_image=docker_image)
 
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     results: list[AgentResult] = []
@@ -76,7 +81,7 @@ def run_tasks(
         results.append(result)
         if on_result:
             on_result(result)
-        _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze)
+        _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze, fingerprint)
 
     return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits))
 
@@ -124,6 +129,7 @@ def _write_summary(
     run_dir: Path, run_id: str, started: str, settings: Settings, limits: AgentLimits, results: list[AgentResult],
     splits: Mapping[str, str],
     freeze: dict[str, Any] | None = None,
+    fingerprint: dict[str, Any] | None = None,
 ) -> None:
     summary = {
         "run_id": run_id,
@@ -134,6 +140,8 @@ def _write_summary(
         "prompt_version": AGENT_PROMPT_VERSION,
         # How the run's tasks compared with the freeze manifest (None when not checked).
         "freeze": freeze,
+        "fingerprint": fingerprint,
+        "cost_basis": settings.cost_basis,
         "limits": asdict(limits),
         "totals": summarize(results, splits),
         "results": [{**asdict(r), "split": splits.get(r.task_id)} for r in results],

@@ -106,6 +106,7 @@ def test_unknown_task_id_fails_before_anything_runs(tasks_root: Path, tmp_path: 
 def test_leftover_containers_are_swept_before_a_docker_run(tasks_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     swept = []
     monkeypatch.setattr(batch, "cleanup_leftover_containers", lambda: swept.append(True))
+    monkeypatch.setattr(batch, "image_digest", lambda: "sha256:fake")
     monkeypatch.setattr(batch, "run_agent", lambda task_dir, **kw: batch._error_result(Path(task_dir).name, SETTINGS, "run-1", "skipped"))
 
     run_tasks(["t001_fixable"], run_id="run-1", runs_dir=tmp_path / "runs", settings=SETTINGS,
@@ -160,3 +161,16 @@ def test_totals_per_split(tasks_root: Path, tmp_path: Path) -> None:
     assert (by_split["heldout"]["tasks"], by_split["heldout"]["passed"], by_split["heldout"]["pass_rate"]) == (1, 0, 0.0)
     assert summary.totals["by_split"] == by_split
     assert [r["split"] for r in read_summary(summary.run_dir)["results"]] == ["dev", "heldout"]
+
+
+def test_summary_records_the_fingerprint_and_cost_basis(tasks_root: Path, tmp_path: Path) -> None:
+    summary = run(tasks_root, tmp_path, [text_reply("no"), text_reply("no")])
+
+    data = read_summary(summary.run_dir)
+    fp = data["fingerprint"]
+    assert (fp["provider"], fp["tier"], fp["model"], fp["mode"]) == ("groq", "free", "openai/gpt-oss-120b", "loop")
+    assert fp["model_settings"] == {"temperature": 1.0, "reasoning_effort": "medium", "max_output_tokens": 8192}
+    assert fp["limits"]["max_steps"] == 20 and fp["prompt_version"] == data["prompt_version"]
+    assert fp["docker_image"] is None  # fake environments have no image
+    assert len(fp["harness_commit"]) == 40 and isinstance(fp["harness_dirty"], bool)
+    assert data["cost_basis"] == "estimated (not billed)"

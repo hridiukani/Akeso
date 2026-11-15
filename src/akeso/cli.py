@@ -129,8 +129,9 @@ def run(
         + (f", stopped by the provider's token limit {t['provider_token_limit']}" if t["provider_token_limit"] else "")
         + f" | average steps {t['average_steps']:.1f}"
         + f" | total tokens {t['total_input_tokens'] + t['total_output_tokens']:,}"
-        + f" | total cost ${t['total_cost_usd']:.4f}"
+        + f" | total cost ${t['total_cost_usd']:.4f} ({settings.cost_basis})"
         + f" | rate-limit retries {t['total_rate_limit_retries']}"
+        + f" | pacing waits {t['total_pacing_waits']} ({t['total_pacing_wait_seconds']:.0f}s)"
     )
     by_split = t.get("by_split", {})
     if len(by_split) > 1:

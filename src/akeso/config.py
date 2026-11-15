@@ -11,6 +11,7 @@ from typing import Any
 from dotenv import dotenv_values
 
 SUPPORTED_PROVIDERS = ("groq", "anthropic")
+GROQ_TIERS = ("free", "developer")
 DEFAULT_PROVIDER = "groq"
 
 
@@ -111,6 +112,19 @@ class Settings:
     # allows about 30 requests a minute, so 2 seconds keeps runs under it.
     groq_min_call_interval: float = 2.0
     anthropic_min_call_interval: float = 0.0
+    # Which Groq service tier the key is on (GROQ_TIER). The free tier doesn't bill, so
+    # its costs are estimates; official runs must use the Developer tier.
+    groq_tier: str = "free"
+
+    @property
+    def tier(self) -> str:
+        """The service tier of the active provider."""
+        return self.groq_tier if self.provider == "groq" else "standard"
+
+    @property
+    def cost_basis(self) -> str:
+        """How to read this run's costs: billed, or an estimate at list prices."""
+        return "estimated (not billed)" if self.tier == "free" else "billed"
 
     @property
     def min_call_interval(self) -> float:
@@ -182,7 +196,15 @@ def load_settings(env_file: str | Path = ".env") -> Settings:
         model_settings=_model_settings(get),
         groq_min_call_interval=_number(get, "GROQ_MIN_CALL_INTERVAL", float, 2.0, minimum=0.0),
         anthropic_min_call_interval=_number(get, "ANTHROPIC_MIN_CALL_INTERVAL", float, 0.0, minimum=0.0),
+        groq_tier=_choice(get, "GROQ_TIER", GROQ_TIERS, "free"),
     )
+
+
+def _choice(get: Callable[[str], str | None], name: str, choices: tuple[str, ...], default: str) -> str:
+    value = (get(name) or default).lower()
+    if value not in choices:
+        raise ConfigError(f"{name}={value!r} must be one of {', '.join(choices)}.")
+    return value
 
 
 def _model_settings(get: Callable[[str], str | None]) -> ModelSettings:

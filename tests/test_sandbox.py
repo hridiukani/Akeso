@@ -508,3 +508,11 @@ def test_cleanup_skips_containers_removed_while_it_runs(monkeypatch: pytest.Monk
 
     assert cleanup_leftover_containers() == []
     assert calls[0]["ignore_removed"] is True
+
+
+@pytest.mark.docker
+def test_image_digest_is_the_images_sha256_id() -> None:
+    digest = sandbox_module.image_digest()
+
+    assert digest.startswith("sha256:") and len(digest) == len("sha256:") + 64
+    assert digest == docker.from_env().images.get(IMAGE).id
