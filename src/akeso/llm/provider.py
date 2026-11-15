@@ -34,12 +34,14 @@ def get_provider(settings: Settings) -> Provider:
 
         # load_settings already guarantees these are set for the active provider.
         assert settings.groq_api_key and settings.groq_model
-        provider: Provider = GroqProvider(api_key=settings.groq_api_key, model=settings.groq_model)
+        provider: Provider = GroqProvider(
+            api_key=settings.groq_api_key, model=settings.groq_model, model_settings=settings.model_settings)
     elif settings.provider == "anthropic":
         from akeso.llm.anthropic_provider import AnthropicProvider
 
         assert settings.anthropic_api_key and settings.anthropic_model
-        provider = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.anthropic_model)
+        provider = AnthropicProvider(
+            api_key=settings.anthropic_api_key, model=settings.anthropic_model, model_settings=settings.model_settings)
     else:
         raise ValueError(f"Unknown provider {settings.provider!r}.")
 

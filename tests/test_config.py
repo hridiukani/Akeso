@@ -1,15 +1,17 @@
 """Tests for load_settings: required keys, provider selection, and clear errors."""
 
+import re
 from pathlib import Path
 
 import pytest
 
-from akeso.config import AgentLimits, ConfigError, load_settings
+from akeso.config import AgentLimits, ConfigError, ModelSettings, load_settings
 
 ENV_VARS = (
     "PROVIDER", "GROQ_API_KEY", "GROQ_MODEL", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
     "AGENT_MAX_STEPS", "AGENT_MAX_COST_USD", "AGENT_MAX_TOTAL_TOKENS", "AGENT_REPEATED_FAILURE_LIMIT",
     "GROQ_MIN_CALL_INTERVAL", "ANTHROPIC_MIN_CALL_INTERVAL",
+    "MODEL_TEMPERATURE", "MODEL_REASONING_EFFORT", "MODEL_MAX_OUTPUT_TOKENS",
 )
 FAKE_GROQ_KEY = "gsk-fake-groq-key-123"
 FAKE_ANTHROPIC_KEY = "sk-ant-fake-anthropic-key-456"
@@ -160,3 +162,28 @@ def test_call_intervals_default_and_override(tmp_path: Path) -> None:
 def test_negative_call_interval_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="GROQ_MIN_CALL_INTERVAL='-1' must be at least 0.0"):
         load_settings(write_env(tmp_path, GROQ_BASE + "GROQ_MIN_CALL_INTERVAL=-1\n"))
+
+
+def test_model_settings_default_to_the_calibration_values(tmp_path: Path) -> None:
+    settings = load_settings(write_env(tmp_path, GROQ_BASE)).model_settings
+
+    assert settings == ModelSettings(temperature=1.0, reasoning_effort="medium", max_output_tokens=8192)
+
+
+def test_model_settings_read_from_env_file(tmp_path: Path) -> None:
+    env = GROQ_BASE + "MODEL_TEMPERATURE=0.2\nMODEL_REASONING_EFFORT=HIGH\nMODEL_MAX_OUTPUT_TOKENS=4000\n"
+
+    settings = load_settings(write_env(tmp_path, env)).model_settings
+
+    assert settings == ModelSettings(temperature=0.2, reasoning_effort="high", max_output_tokens=4000)
+
+
+@pytest.mark.parametrize(("line", "message"), [
+    ("MODEL_REASONING_EFFORT=extreme", "MODEL_REASONING_EFFORT='extreme' must be one of low, medium, high"),
+    ("MODEL_TEMPERATURE=3", "must be at most 2.0"),
+    ("MODEL_TEMPERATURE=-1", "MODEL_TEMPERATURE='-1' must be at least 0.0"),
+    ("MODEL_MAX_OUTPUT_TOKENS=0", "MODEL_MAX_OUTPUT_TOKENS='0' must be at least 1"),
+])
+def test_invalid_model_settings_name_the_variable(tmp_path: Path, line: str, message: str) -> None:
+    with pytest.raises(ConfigError, match=re.escape(message)):
+        load_settings(write_env(tmp_path, GROQ_BASE + line + "\n"))

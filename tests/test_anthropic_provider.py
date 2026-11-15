@@ -8,7 +8,7 @@ try:  # anthropic 1.x is built on httpx2
 except ImportError:
     import httpx
 
-from akeso.config import PRICES, Settings
+from akeso.config import PRICES, ModelSettings, Settings
 from akeso.llm.anthropic_provider import (
     AnthropicProvider,
     AnthropicRetriesExhausted,
@@ -38,16 +38,17 @@ TOOL_USE = {"type": "tool_use", "id": "toolu_1", "name": "read_file", "input": {
 
 
 def test_system_prompt_carries_the_cache_breakpoint_and_tools_come_first() -> None:
-    request = build_request("claude-sonnet-5", 16000, "You fix bugs.", [Message.user("hi")], [TOOL])
+    request = build_request("claude-sonnet-5", ModelSettings(), "You fix bugs.", [Message.user("hi")], [TOOL])
 
     assert request["system"] == [{"type": "text", "text": "You fix bugs.", "cache_control": {"type": "ephemeral"}}]
     assert request["tools"] == [{"name": "read_file", "description": "Read a file.", "input_schema": TOOL.input_schema}]
     assert request["messages"] == [{"role": "user", "content": "hi"}]
-    assert request["max_tokens"] == 16000 and "thinking" not in request  # the model's default
+    assert request["max_tokens"] == 8192 and request["output_config"] == {"effort": "medium"}  # pinned
+    assert "thinking" not in request and "temperature" not in request
 
 
 def test_no_tools_key_without_tools() -> None:
-    assert "tools" not in build_request("m", 10, "s", [Message.user("hi")], None)
+    assert "tools" not in build_request("m", ModelSettings(), "s", [Message.user("hi")], None)
 
 
 def test_tool_results_of_one_turn_go_back_in_one_user_message() -> None:

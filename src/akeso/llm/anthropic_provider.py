@@ -17,6 +17,7 @@ from typing import Any
 
 import anthropic
 
+from akeso.config import ModelSettings
 from akeso.llm.types import Message, ModelResponse, ProviderTokenLimitError, StopReason, ToolCall, ToolDefinition, Usage
 
 # Anthropic stop_reason -> our StopReason ("refusal", "pause_turn", ... map to "other").
@@ -38,14 +39,14 @@ class AnthropicProvider:
         self,
         api_key: str,
         model: str,
-        max_tokens: int = 16_000,
+        model_settings: ModelSettings = ModelSettings(),
         max_attempts: int = 6,
         base_delay: float = 2.0,
         max_delay: float = 60.0,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.model = model
-        self.max_tokens = max_tokens  # output cap per call, thinking included
+        self.model_settings = model_settings
         self.max_attempts = max_attempts
         self.base_delay = base_delay
         self.max_delay = max_delay
@@ -60,7 +61,7 @@ class AnthropicProvider:
         tools: Sequence[ToolDefinition] | None = None,
     ) -> ModelResponse:
         """Send one request, retrying on rate limits and overload, and return it in our format."""
-        request = build_request(self.model, self.max_tokens, system, messages, tools)
+        request = build_request(self.model, self.model_settings, system, messages, tools)
         response, retries = self._create_with_retry(request)
         return from_anthropic_response(response, retries)
 
@@ -95,12 +96,18 @@ class AnthropicProvider:
 
 
 def build_request(
-    model: str, max_tokens: int, system: str, messages: Sequence[Message], tools: Sequence[ToolDefinition] | None
+    model: str, settings: ModelSettings, system: str, messages: Sequence[Message], tools: Sequence[ToolDefinition] | None
 ) -> dict[str, Any]:
-    """The messages.create arguments for our conversation, with the cache breakpoint."""
+    """The messages.create arguments for our conversation, with the cache breakpoint.
+
+    The output cap and effort are pinned on every call (see ModelSettings). Temperature
+    isn't sent: current Claude models reject non-default values and the v1 SDK has removed
+    the parameter, so the model's fixed default applies.
+    """
     request: dict[str, Any] = {
         "model": model,
-        "max_tokens": max_tokens,
+        "max_tokens": settings.max_output_tokens,  # output cap per call, thinking included
+        "output_config": {"effort": settings.reasoning_effort},
         "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         "messages": to_anthropic_messages(messages),
     }

@@ -12,6 +12,7 @@ from typing import Any
 
 import openai
 
+from akeso.config import ModelSettings
 from akeso.llm.pacing import RateLimitBudget, RateLimitHeaders, estimate_tokens
 from akeso.llm.types import (
     Message,
@@ -56,8 +57,10 @@ class GroqProvider:
         sleep: Callable[[float], None] = time.sleep,
         max_tool_call_attempts: int = 3,
         clock: Callable[[], float] = time.monotonic,
+        model_settings: ModelSettings = ModelSettings(),
     ) -> None:
         self.model = model
+        self.model_settings = model_settings
         self.max_attempts = max_attempts
         self.max_tool_call_attempts = max_tool_call_attempts
         self.base_delay = base_delay
@@ -76,9 +79,14 @@ class GroqProvider:
         tools: Sequence[ToolDefinition] | None = None,
     ) -> ModelResponse:
         """Send one chat request, retrying on rate limits, and return it in our format."""
+        settings = self.model_settings
         request: dict[str, Any] = {
             "model": self.model,
             "messages": _to_openai_messages(system, messages),
+            # Pinned on every call (see ModelSettings), never left to Groq's defaults.
+            "temperature": settings.temperature,
+            "reasoning_effort": settings.reasoning_effort,
+            "max_completion_tokens": settings.max_output_tokens,
         }
         if tools:
             request["tools"] = [_to_openai_tool(t) for t in tools]

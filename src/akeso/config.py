@@ -64,6 +64,27 @@ PRICES: dict[str, ModelPrice] = {
 }
 
 
+REASONING_EFFORTS = ("low", "medium", "high")  # what gpt-oss accepts
+
+
+@dataclass(frozen=True)
+class ModelSettings:
+    """Every request setting that can change what the model does. Sent explicitly on every
+    call, never left to the provider's defaults (which can change without notice), so runs
+    are reproducible. Set in .env (MODEL_*); these are the defaults.
+
+    The defaults match what the calibration ran with, so pinning them doesn't change the
+    agent's behaviour: temperature 1.0 and reasoning effort "medium" are Groq's defaults for
+    gpt-oss (and 1.0 is the sampling setting gpt-oss is meant to run at). The output cap is
+    explicit too: 8192 is nearly four times the longest reply in the calibration (2,191
+    tokens), where Groq's own default is the model's maximum, 65,536.
+    """
+
+    temperature: float = 1.0
+    reasoning_effort: str = "medium"
+    max_output_tokens: int = 8192
+
+
 @dataclass(frozen=True)
 class AgentLimits:
     """When the agent loop must stop. Set in .env (AGENT_*); these are the defaults."""
@@ -85,6 +106,7 @@ class Settings:
     groq_api_key: str | None = field(default=None, repr=False)
     anthropic_api_key: str | None = field(default=None, repr=False)
     limits: AgentLimits = field(default_factory=AgentLimits)
+    model_settings: ModelSettings = field(default_factory=ModelSettings)
     # Minimum seconds between the starts of two model calls, per provider. Groq's free tier
     # allows about 30 requests a minute, so 2 seconds keeps runs under it.
     groq_min_call_interval: float = 2.0
@@ -157,8 +179,24 @@ def load_settings(env_file: str | Path = ".env") -> Settings:
         groq_api_key=get("GROQ_API_KEY"),
         anthropic_api_key=get("ANTHROPIC_API_KEY"),
         limits=limits,
+        model_settings=_model_settings(get),
         groq_min_call_interval=_number(get, "GROQ_MIN_CALL_INTERVAL", float, 2.0, minimum=0.0),
         anthropic_min_call_interval=_number(get, "ANTHROPIC_MIN_CALL_INTERVAL", float, 0.0, minimum=0.0),
+    )
+
+
+def _model_settings(get: Callable[[str], str | None]) -> ModelSettings:
+    defaults = ModelSettings()
+    effort = (get("MODEL_REASONING_EFFORT") or defaults.reasoning_effort).lower()
+    if effort not in REASONING_EFFORTS:
+        raise ConfigError(f"MODEL_REASONING_EFFORT={effort!r} must be one of {', '.join(REASONING_EFFORTS)}.")
+    temperature = _number(get, "MODEL_TEMPERATURE", float, defaults.temperature, minimum=0.0)
+    if temperature > 2.0:
+        raise ConfigError(f"MODEL_TEMPERATURE={temperature!r} must be at most 2.0.")
+    return ModelSettings(
+        temperature=temperature,
+        reasoning_effort=effort,
+        max_output_tokens=_number(get, "MODEL_MAX_OUTPUT_TOKENS", int, defaults.max_output_tokens, minimum=1),
     )
 
 

@@ -165,3 +165,28 @@ def test_request_too_large_raises_provider_token_limit() -> None:
     with pytest.raises(ProviderTokenLimitError, match="HTTP 413"):
         ask(provider)
     assert sleeps == []  # waiting can't help
+
+
+def test_model_settings_are_sent_on_every_call() -> None:
+    from akeso.config import ModelSettings
+
+    sent = []
+    provider = GroqProvider(api_key="fake", model="openai/gpt-oss-120b",
+                            model_settings=ModelSettings(temperature=0.5, reasoning_effort="high", max_output_tokens=1234))
+    provider._send = lambda request: sent.append(request) or (OK, {})
+
+    ask(provider)
+    ask(provider)
+
+    for request in sent:
+        assert (request["temperature"], request["reasoning_effort"], request["max_completion_tokens"]) == (0.5, "high", 1234)
+
+
+def test_default_model_settings_are_explicit() -> None:
+    sent = []
+    provider = GroqProvider(api_key="fake", model="openai/gpt-oss-120b")
+    provider._send = lambda request: sent.append(request) or (OK, {})
+
+    ask(provider)
+
+    assert (sent[0]["temperature"], sent[0]["reasoning_effort"], sent[0]["max_completion_tokens"]) == (1.0, "medium", 8192)
