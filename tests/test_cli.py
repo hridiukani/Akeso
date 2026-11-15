@@ -67,7 +67,7 @@ def test_run_prints_table_and_totals(fake_run) -> None:
     assert fake_run["task_ids"] == ["c001_mean", "c002_shipping", "c003_discount"]
     for text in ("c001_mean", "passed", "c002_shipping", "failed", "max_steps", "tampered", "4,600", "30,100"):
         assert text in out.output
-    assert "Passed 1/3 (33%), tampered 1" in out.output
+    assert "Passed 1/3 attempts (33%), tampered 1" in out.output
     assert "average steps 9.0" in out.output and "total tokens 40,800" in out.output
     assert "rate-limit retries 0" in out.output
     assert "dev: passed 1/2 (50%)" in out.output and "heldout: passed 0/1 (0%)" in out.output
@@ -229,7 +229,7 @@ def test_official_run_shows_an_estimate_and_can_be_cancelled(fake_run, monkeypat
     out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official"], input="n\n")
 
     assert out.exit_code == 1
-    assert "Official run of smoke: 3 task(s) on groq (developer tier) / openai/gpt-oss-120b." in out.output
+    assert "Official run of smoke: 3 task(s) x 3 repeat(s) on groq (developer tier) / openai/gpt-oss-120b." in out.output
     assert "Estimated: about" in out.output and "at list prices" in out.output
     assert "Cancelled; nothing was run." in out.output and "task_ids" not in fake_run
 
@@ -255,3 +255,38 @@ def test_ordinary_runs_are_labelled_dev(fake_run) -> None:
     out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
 
     assert out.exit_code == 0 and fake_run["run_type"] == "dev" and "(dev run)" in out.output
+
+
+def test_repeats_show_solve_rates_and_spread(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run_tasks(task_ids, **kwargs):
+        fake_run.update(task_ids=task_ids, **kwargs)
+        results = [replace(result("c001_mean", Verdict.PASSED if rep < 3 else Verdict.FAILED, 3, 4000, StopReason.PASSED), repeat=rep)
+                   for rep in (1, 2, 3)]
+        return RunSummary(run_id="run-r", run_dir=Path("runs/run-r"), results=results,
+                          totals=summarize(results, {"c001_mean": "dev"}))
+
+    monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--repeats", "3"])
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["repeats"] == 3
+    assert "2/3" in out.output and "Solved" in out.output
+    assert "pass rate 67% +/- 58% over 3 repeats | pass@1 67% | pass@3 100%" in out.output
+
+
+def test_official_runs_default_to_three_repeats(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_settings", lambda: DEVELOPER)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official", "--yes"])
+
+    assert out.exit_code == 0 and fake_run["repeats"] == 3
+
+
+def test_trace_shows_a_later_repeat(tmp_path: Path) -> None:
+    with TraceWriter(trace_path(tmp_path, "run-1", "c001_mean", 2)) as trace:
+        trace.event("error", step=1, error="second attempt")
+
+    out = runner.invoke(cli.app, ["trace", "run-1", "c001_mean", "--repeat", "2", "--runs-dir", str(tmp_path)])
+
+    assert out.exit_code == 0 and "second attempt" in out.output

@@ -25,6 +25,9 @@ MEASUREMENT_TIER = "developer"
 MEASUREMENT_MODEL = "openai/gpt-oss-120b"
 MEASUREMENT_MODEL_SETTINGS = ModelSettings()
 MEASUREMENT_LIMITS = AgentLimits()
+# Attempts per task in an official run, unless --repeats says otherwise: enough to see the
+# spread between runs, at three times the cost of one.
+OFFICIAL_REPEATS = 3
 
 # Without earlier runs of a task to go on, assume a typical attempt (the calibration
 # averaged about 20,000 tokens per task, roughly 90% of them input).

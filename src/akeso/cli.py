@@ -1,7 +1,8 @@
 """The `akeso` command-line tool.
 
     akeso run --suite smoke [--model M] [--max-steps N] [--max-cost USD] [--run-id ID] [--allow-modified]
-    akeso run --suite full --official [--yes]
+    akeso run --suite full --official [--yes] [--repeats N]
+    akeso trace RUN_ID TASK_ID [--repeat N]
     akeso validate [--suite smoke]
     akeso freeze
     akeso trace RUN_ID TASK_ID [--full]
@@ -11,6 +12,7 @@
 from __future__ import annotations
 
 import sys
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import replace
 from functools import wraps
@@ -22,11 +24,11 @@ from rich.console import Console
 from rich.table import Table
 
 from akeso import fingerprint as run_fingerprint
-from akeso.batch import run_tasks
+from akeso.batch import RunSummary, run_tasks
 from akeso.config import PRICES, ConfigError, Settings, load_settings
 from akeso.freeze import DEFAULT_MANIFEST, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest
 from akeso.grading import Verdict
-from akeso.official import estimate, official_problems
+from akeso.official import OFFICIAL_REPEATS, estimate, official_problems
 from akeso.sandbox import LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers, image_digest
 from akeso.suites import SuiteError, load_suite
 from akeso.tasks import TaskError, all_tasks, find_task
@@ -87,6 +89,8 @@ def run(
     official: bool = typer.Option(
         False, "--official", help="An official (reportable) run: measurement setup, frozen suite, clean tree."),
     yes: bool = typer.Option(False, "--yes", help="Don't ask for confirmation before an official run."),
+    repeats: Optional[int] = typer.Option(
+        None, "--repeats", min=1, help="Attempts per task, each in fresh sandboxes (default 1; official runs 3)."),
 ) -> None:
     """Run the agent on every task in a suite and print the results."""
     task_ids = load_suite(suite)
@@ -100,6 +104,7 @@ def run(
     if max_cost is not None:
         limits = replace(limits, max_cost_usd=max_cost)
     fingerprint = run_fingerprint.collect(settings, limits, docker_image=image_digest())
+    repeats = repeats or (OFFICIAL_REPEATS if official else 1)
 
     if official:
         try:
@@ -115,9 +120,9 @@ def run(
                 console.print(f"  - {problem}", highlight=False, soft_wrap=True)
             raise typer.Exit(code=1)
         assert check is not None
-        guess = estimate(task_ids, settings.model, DEFAULT_TRACE_DIR)
+        guess = estimate(task_ids, settings.model, DEFAULT_TRACE_DIR, repeats=repeats)
         console.print(
-            f"Official run of [bold]{suite}[/bold]: {len(task_ids)} task(s) on {settings.provider} "
+            f"Official run of [bold]{suite}[/bold]: {len(task_ids)} task(s) x {repeats} repeat(s) on {settings.provider} "
             f"({settings.tier} tier) / {settings.model}.\n"
             f"Estimated: about {guess.tokens:,} tokens ({guess.input_tokens:,} in, {guess.output_tokens:,} out), "
             f"about ${guess.cost_usd:.2f} at list prices, assuming no cache hits "
@@ -141,42 +146,75 @@ def run(
               "modified_files": check.modified}
     run_type = "official" if official else "dev"
 
-    console.print(f"Running suite [bold]{suite}[/bold] ({len(task_ids)} tasks) on {settings.provider} / {settings.model}"
-                  f" [bold]({run_type} run)[/bold]")
+    console.print(f"Running suite [bold]{suite}[/bold] ({len(task_ids)} tasks x {repeats} repeat(s)) on "
+                  f"{settings.provider} / {settings.model} [bold]({run_type} run)[/bold]", soft_wrap=True)
     summary = run_tasks(
         task_ids, run_id=run_id, settings=settings, limits=limits, freeze=freeze,
-        fingerprint=fingerprint, run_type=run_type,
-        on_result=lambda r: console.print(f"  {r.task_id}: [{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]"),
+        fingerprint=fingerprint, run_type=run_type, repeats=repeats,
+        on_result=lambda r: console.print(
+            f"  {r.task_id}" + (f" (repeat {r.repeat})" if repeats > 1 else "")
+            + f": [{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]"),
     )
+    _print_summary(summary, settings.cost_basis, run_type)
 
+
+def _print_summary(summary: RunSummary, cost_basis: str, run_type: str) -> None:
+    """The results table and totals, overall and per split. With repeats, one row per task
+    with its solve rate; otherwise one row per attempt."""
+    t = summary.totals
     table = Table(title=f"Run {summary.run_id} ({run_type})")
-    for column, justify in (("Task", "left"), ("Verdict", "left"), ("Steps", "right"),
-                            ("Tokens", "right"), ("Cost", "right"), ("Stop reason", "left")):
-        table.add_column(column, justify=justify)
-    for r in summary.results:
-        table.add_row(
-            r.task_id, f"[{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]", str(r.steps),
-            f"{r.input_tokens + r.output_tokens:,}", f"${r.cost_usd:.4f}", r.stop_reason.value,
-        )
+    if t["repeats"] > 1:
+        for column, justify in (("Task", "left"), ("Solved", "right"), ("Avg steps", "right"),
+                                ("Avg tokens", "right"), ("Avg cost", "right"), ("Stop reasons", "left")):
+            table.add_column(column, justify=justify)
+        for task_id, rate in t["solve_rates"].items():
+            attempts = [r for r in summary.results if r.task_id == task_id]
+            stops = Counter(r.stop_reason.value for r in attempts)
+            table.add_row(
+                task_id, rate, f"{sum(r.steps for r in attempts) / len(attempts):.1f}",
+                f"{sum(r.input_tokens + r.output_tokens for r in attempts) / len(attempts):,.0f}",
+                f"${sum(r.cost_usd for r in attempts) / len(attempts):.4f}",
+                ", ".join(f"{stop} x{n}" if n > 1 else stop for stop, n in sorted(stops.items())),
+            )
+    else:
+        for column, justify in (("Task", "left"), ("Verdict", "left"), ("Steps", "right"),
+                                ("Tokens", "right"), ("Cost", "right"), ("Stop reason", "left")):
+            table.add_column(column, justify=justify)
+        for r in summary.results:
+            table.add_row(
+                r.task_id, f"[{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]", str(r.steps),
+                f"{r.input_tokens + r.output_tokens:,}", f"${r.cost_usd:.4f}", r.stop_reason.value,
+            )
     console.print(table)
 
-    t = summary.totals
     console.print(
-        f"Passed {t['passed']}/{t['tasks']} ({t['pass_rate']:.0%})"
+        f"Passed {t['passed']}/{t['attempts']} attempts ({t['pass_rate']:.0%})"
         + (f", tampered {t['tampered']}" if t["tampered"] else "")
         + (f", stopped by the provider's token limit {t['provider_token_limit']}" if t["provider_token_limit"] else "")
         + f" | average steps {t['average_steps']:.1f}"
         + f" | total tokens {t['total_input_tokens'] + t['total_output_tokens']:,}"
-        + f" | total cost ${t['total_cost_usd']:.4f} ({settings.cost_basis})"
+        + f" | total cost ${t['total_cost_usd']:.4f} ({cost_basis})"
         + f" | rate-limit retries {t['total_rate_limit_retries']}"
-        + f" | pacing waits {t['total_pacing_waits']} ({t['total_pacing_wait_seconds']:.0f}s)"
+        + f" | pacing waits {t['total_pacing_waits']} ({t['total_pacing_wait_seconds']:.0f}s)",
+        soft_wrap=True,
     )
-    by_split = t.get("by_split", {})
-    if len(by_split) > 1:
-        for split, s in by_split.items():
-            console.print(f"  {split}: passed {s['passed']}/{s['tasks']} ({s['pass_rate']:.0%})"
-                          f" | average steps {s['average_steps']:.1f} | total cost ${s['total_cost_usd']:.4f}")
+    groups = [("overall", t)] + list(t.get("by_split", {}).items())
+    if t["repeats"] > 1 or len(groups) > 2:
+        for name, g in groups:
+            if name != "overall" and len(groups) <= 2:
+                continue  # a single split repeats the overall line
+            console.print(f"  {name}: {_rates(g)} | average steps {g['average_steps']:.1f}"
+                          f" | average tokens {g['average_tokens']:,.0f} | total cost ${g['total_cost_usd']:.4f}",
+                          soft_wrap=True)
     console.print(f"Run folder: {summary.run_dir}")
+
+
+def _rates(g: dict[str, Any]) -> str:
+    """The pass-rate line for one group: with repeats, mean and spread plus pass@1/pass@k."""
+    if g["repeats"] <= 1:
+        return f"passed {g['passed']}/{g['attempts']} ({g['pass_rate']:.0%})"
+    return (f"pass rate {g['pass_rate_mean']:.0%} +/- {g['pass_rate_std']:.0%} over {g['repeats']} repeats"
+            f" | pass@1 {g['pass_at_1']:.0%} | pass@{g['k']} {g['pass_at_k']:.0%}")
 
 
 @app.command()
@@ -210,9 +248,10 @@ def trace(
     task_id: str = typer.Argument(..., help="The task to show."),
     full: bool = typer.Option(False, "--full", help="Show complete outputs instead of previews."),
     runs_dir: Path = typer.Option(DEFAULT_TRACE_DIR, "--runs-dir", help="Where run folders live."),
+    repeat: int = typer.Option(1, "--repeat", min=1, help="Which attempt, in a run with repeats."),
 ) -> None:
     """Show one task's trace as a step-by-step story."""
-    path = trace_path(runs_dir, run_id, task_id)
+    path = trace_path(runs_dir, run_id, task_id, repeat)
     if not path.is_file():
         console.print(f"[red]Error:[/red] no trace at {path}")
         raise typer.Exit(code=1)
