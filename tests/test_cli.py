@@ -1,6 +1,6 @@
 """Tests for the akeso command-line tool (run_tasks and Docker replaced by fakes)."""
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import pytest
@@ -290,3 +290,83 @@ def test_trace_shows_a_later_repeat(tmp_path: Path) -> None:
     out = runner.invoke(cli.app, ["trace", "run-1", "c001_mean", "--repeat", "2", "--runs-dir", str(tmp_path)])
 
     assert out.exit_code == 0 and "second attempt" in out.output
+
+
+FP = {"harness_commit": "c" * 40, "harness_dirty": False, "docker_image": "sha256:image"}
+
+
+@pytest.fixture
+def saved_run(fake_run, monkeypatch: pytest.MonkeyPatch):
+    """A dev run of two tasks x 2 repeats that stopped after its first attempt."""
+    done = result("c001_mean", Verdict.PASSED, 3, 4500, StopReason.PASSED)
+    saved = {"run_id": "run-old", "run_type": "dev", "repeats": 2, "task_ids": ["c001_mean", "c002_shipping"],
+             "fingerprint": dict(FP), "freeze": {"allow_modified": False},
+             "results": [{**asdict(done), "verdict": "passed", "stop_reason": "passed"}]}
+    monkeypatch.setattr(cli, "load_for_resume", lambda run_id, runs_dir: saved)
+
+    def fake_resume_tasks(run_id, **kwargs):
+        fake_run.update(resumed=run_id, **kwargs)
+        return RunSummary(run_id=run_id, run_dir=Path("runs") / run_id, results=[done], totals=summarize([done]))
+
+    monkeypatch.setattr(cli, "resume_tasks", fake_resume_tasks)
+    return saved
+
+
+def test_resume_runs_what_is_left(fake_run, saved_run) -> None:
+    out = runner.invoke(cli.app, ["run", "--resume", "run-old"])
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["resumed"] == "run-old"
+    assert "Resuming run run-old (dev run): 1 attempt(s) kept, 3 to run" in out.output
+
+
+def test_resume_refuses_a_changed_setup(fake_run, saved_run) -> None:
+    fake_run["fingerprint"] = {**FP, "harness_commit": "d" * 40}
+
+    out = runner.invoke(cli.app, ["run", "--resume", "run-old"])
+
+    assert out.exit_code == 1 and "can't be resumed" in out.output and "harness_commit" in out.output
+    assert "resumed" not in fake_run
+
+
+def test_resume_keeps_the_original_options(fake_run, saved_run) -> None:
+    out = runner.invoke(cli.app, ["run", "--resume", "run-old", "--max-steps", "3", "--suite", "smoke"])
+
+    assert out.exit_code == 1 and "--suite, --max-steps can't be used with --resume" in out.output
+
+
+def test_resume_of_a_complete_run_does_nothing(fake_run, saved_run) -> None:
+    saved_run["repeats"], saved_run["task_ids"] = 1, ["c001_mean"]
+
+    out = runner.invoke(cli.app, ["run", "--resume", "run-old"])
+
+    assert out.exit_code == 0 and "already complete" in out.output and "resumed" not in fake_run
+
+
+def test_resuming_an_official_run_rechecks_the_measurement_setup(fake_run, saved_run) -> None:
+    saved_run["run_type"] = "official"
+
+    out = runner.invoke(cli.app, ["run", "--resume", "run-old"])  # SETTINGS is the free tier
+
+    assert out.exit_code == 1 and "this can't be an official run" in out.output and "resumed" not in fake_run
+
+
+def test_run_needs_a_suite_or_resume(fake_run) -> None:
+    out = runner.invoke(cli.app, ["run"])
+
+    assert out.exit_code == 1 and "Pass --suite NAME (or --resume RUN_ID)" in out.output
+
+
+def test_a_run_stopped_by_the_quota_says_how_to_finish_it(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run_tasks(task_ids, **kwargs):
+        done = [result("c001_mean", Verdict.PASSED, 3, 4500, StopReason.PASSED)]
+        return RunSummary(run_id="run-q", run_dir=Path("runs/run-q"), results=done, totals=summarize(done),
+                          not_run=[("c002_shipping", 1), ("c003_discount", 1)], stopped="quota exhausted: used up")
+
+    monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 0
+    assert "Stopped early (quota exhausted: used up). 2 attempt(s) not run" in out.output
+    assert "akeso run --resume run-q" in out.output

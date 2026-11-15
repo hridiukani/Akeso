@@ -2,6 +2,7 @@
 
     akeso run --suite smoke [--model M] [--max-steps N] [--max-cost USD] [--run-id ID] [--allow-modified]
     akeso run --suite full --official [--yes] [--repeats N]
+    akeso run --resume RUN_ID [--yes]
     akeso trace RUN_ID TASK_ID [--repeat N]
     akeso validate [--suite smoke]
     akeso freeze
@@ -17,16 +18,22 @@ from collections.abc import Callable
 from dataclasses import replace
 from functools import wraps
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, NoReturn, Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from akeso import fingerprint as run_fingerprint
-from akeso.batch import RunSummary, run_tasks
+from akeso.agent import AgentResult
+from akeso.batch import (
+    ResumeError, RunSummary, load_for_resume, planned_attempts, resume_differences, resume_tasks, run_tasks,
+    split_attempts,
+)
 from akeso.config import PRICES, ConfigError, Settings, load_settings
-from akeso.freeze import DEFAULT_MANIFEST, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest
+from akeso.freeze import (
+    DEFAULT_MANIFEST, FreezeCheck, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest,
+)
 from akeso.grading import Verdict
 from akeso.official import OFFICIAL_REPEATS, estimate, official_problems
 from akeso.sandbox import LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers, image_digest
@@ -79,7 +86,7 @@ def _with_model(settings: Settings, model: str) -> Settings:
 @app.command()
 @_friendly_errors
 def run(
-    suite: str = typer.Option(..., "--suite", help="Suite name: runs the task ids in suites/<name>.yaml."),
+    suite: Optional[str] = typer.Option(None, "--suite", help="Suite name: runs the task ids in suites/<name>.yaml."),
     model: Optional[str] = typer.Option(None, "--model", help="Model to use for the active provider."),
     max_steps: Optional[int] = typer.Option(None, "--max-steps", min=1, help="Maximum model calls per task."),
     max_cost: Optional[float] = typer.Option(None, "--max-cost", min=0.0, help="Maximum cost per task, in dollars."),
@@ -91,8 +98,20 @@ def run(
     yes: bool = typer.Option(False, "--yes", help="Don't ask for confirmation before an official run."),
     repeats: Optional[int] = typer.Option(
         None, "--repeats", min=1, help="Attempts per task, each in fresh sandboxes (default 1; official runs 3)."),
+    resume: Optional[str] = typer.Option(
+        None, "--resume", help="Finish run RUN_ID: rerun only its missing and crashed attempts, same setup."),
 ) -> None:
     """Run the agent on every task in a suite and print the results."""
+    if resume:
+        clashing = [name for name, value in (("--suite", suite), ("--model", model), ("--max-steps", max_steps),
+                                             ("--max-cost", max_cost), ("--run-id", run_id), ("--repeats", repeats),
+                                             ("--official", official or None)) if value is not None]
+        if clashing:
+            _fail(f"{', '.join(clashing)} can't be used with --resume: a resumed run keeps its original setup.")
+        _resume(resume, allow_modified=allow_modified, yes=yes)
+        return
+    if not suite:
+        _fail("Pass --suite NAME (or --resume RUN_ID).")
     task_ids = load_suite(suite)
     tasks = [find_task(task_id) for task_id in task_ids]  # report a bad suite before spending anything
     settings = load_settings()
@@ -105,43 +124,13 @@ def run(
         limits = replace(limits, max_cost_usd=max_cost)
     fingerprint = run_fingerprint.collect(settings, limits, docker_image=image_digest())
     repeats = repeats or (OFFICIAL_REPEATS if official else 1)
-
-    if official:
-        try:
-            check = check_tasks(tasks, read_manifest())
-        except FreezeError:
-            check = None
-        overrides = [name for name, value in (("--model", model), ("--max-steps", max_steps), ("--max-cost", max_cost))
-                     if value is not None]
-        problems = official_problems(settings, limits, check, fingerprint, allow_modified=allow_modified, overrides=overrides)
-        if problems:
-            console.print("[red]Error:[/red] this can't be an official run:", highlight=False)
-            for problem in problems:
-                console.print(f"  - {problem}", highlight=False, soft_wrap=True)
-            raise typer.Exit(code=1)
-        assert check is not None
-        guess = estimate(task_ids, settings.model, DEFAULT_TRACE_DIR, repeats=repeats)
-        console.print(
-            f"Official run of [bold]{suite}[/bold]: {len(task_ids)} task(s) x {repeats} repeat(s) on {settings.provider} "
-            f"({settings.tier} tier) / {settings.model}.\n"
-            f"Estimated: about {guess.tokens:,} tokens ({guess.input_tokens:,} in, {guess.output_tokens:,} out), "
-            f"about ${guess.cost_usd:.2f} at list prices, assuming no cache hits "
-            f"({guess.tasks_with_history} of {guess.tasks} task estimates come from earlier runs).",
-            highlight=False, soft_wrap=True,
-        )
-        if not yes and not typer.confirm("Start the official run?", default=False):
-            console.print("Cancelled; nothing was run.")
-            raise typer.Exit(code=1)
-    else:
-        check = check_tasks(tasks, read_manifest())
-    if not check.ok and not allow_modified:
-        listed = "\n  ".join(check.modified[:20]) + ("\n  ..." if len(check.modified) > 20 else "")
-        console.print(f"[red]Error:[/red] {len(check.modified)} task file(s) changed since the freeze "
-                      f"({DEFAULT_MANIFEST}):\n  {listed}\nTasks are frozen (see FREEZE.md). "
-                      "Pass --allow-modified to run anyway; the run's results will record it.", highlight=False)
-        raise typer.Exit(code=1)
-    if not check.ok:
-        console.print(f"[yellow]Warning:[/yellow] running with {len(check.modified)} task file(s) changed since the freeze.")
+    overrides = [name for name, value in (("--model", model), ("--max-steps", max_steps), ("--max-cost", max_cost))
+                 if value is not None]
+    check = _check_before_running(
+        tasks, settings, limits, fingerprint, official=official, allow_modified=allow_modified, overrides=overrides,
+        attempts=[(task_id, repeat) for repeat in range(1, repeats + 1) for task_id in task_ids], yes=yes,
+        heading=f"Official run of [bold]{suite}[/bold]: {len(task_ids)} task(s) x {repeats} repeat(s)",
+    )
     freeze = {"manifest_fingerprint": check.manifest_fingerprint, "allow_modified": allow_modified,
               "modified_files": check.modified}
     run_type = "official" if official else "dev"
@@ -150,12 +139,98 @@ def run(
                   f"{settings.provider} / {settings.model} [bold]({run_type} run)[/bold]", soft_wrap=True)
     summary = run_tasks(
         task_ids, run_id=run_id, settings=settings, limits=limits, freeze=freeze,
-        fingerprint=fingerprint, run_type=run_type, repeats=repeats,
-        on_result=lambda r: console.print(
-            f"  {r.task_id}" + (f" (repeat {r.repeat})" if repeats > 1 else "")
-            + f": [{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]"),
+        fingerprint=fingerprint, run_type=run_type, repeats=repeats, on_result=_progress(repeats),
     )
     _print_summary(summary, settings.cost_basis, run_type)
+
+
+def _resume(run_id: str, *, allow_modified: bool, yes: bool) -> None:
+    """akeso run --resume RUN_ID: the same checks as a fresh run, against the run's own setup."""
+    try:
+        saved = load_for_resume(run_id, DEFAULT_TRACE_DIR)
+    except ResumeError as problem:
+        _fail(str(problem))
+    settings = load_settings()
+    limits = settings.limits
+    fingerprint = run_fingerprint.collect(settings, limits, docker_image=image_digest())
+    changed = resume_differences(saved, fingerprint)
+    if changed:
+        console.print(f"[red]Error:[/red] run {run_id} can't be resumed: the setup has changed since it started, "
+                      "and resuming would mix two experiments:", highlight=False, soft_wrap=True)
+        for line in changed:
+            console.print(f"  - {line}", highlight=False, soft_wrap=True)
+        raise typer.Exit(code=1)
+    kept, todo = split_attempts(saved)
+    if not todo:
+        console.print(f"Run {run_id} is already complete; nothing to resume.")
+        return
+    run_type = saved.get("run_type") or "dev"
+    task_ids = list(dict.fromkeys(task_id for task_id, _ in planned_attempts(saved)))
+    tasks = [find_task(task_id) for task_id in task_ids]
+    allow_modified = allow_modified or bool((saved.get("freeze") or {}).get("allow_modified"))
+    _check_before_running(
+        tasks, settings, limits, fingerprint, official=run_type == "official", allow_modified=allow_modified,
+        overrides=[], attempts=todo, yes=yes, heading=f"Resuming official run [bold]{run_id}[/bold]: {len(todo)} attempt(s)",
+    )
+    repeats = saved.get("repeats") or 1
+    console.print(f"Resuming run [bold]{run_id}[/bold] [bold]({run_type} run)[/bold]: {len(kept)} attempt(s) kept, "
+                  f"{len(todo)} to run", soft_wrap=True)
+    summary = resume_tasks(run_id, fingerprint=fingerprint, settings=settings, limits=limits,
+                           on_result=_progress(repeats))
+    _print_summary(summary, settings.cost_basis, run_type)
+
+
+def _check_before_running(
+    tasks: list[Any], settings: Settings, limits: Any, fingerprint: dict[str, Any], *, official: bool,
+    allow_modified: bool, overrides: list[str], attempts: list[tuple[str, int]], yes: bool, heading: str,
+) -> FreezeCheck:
+    """Refuse modified tasks (unless allowed); for an official run, refuse anything but the
+    measurement setup, then show an estimate and ask for confirmation."""
+    if official:
+        try:
+            check: FreezeCheck | None = check_tasks(tasks, read_manifest())
+        except FreezeError:
+            check = None
+        problems = official_problems(settings, limits, check, fingerprint, allow_modified=allow_modified, overrides=overrides)
+        if problems:
+            console.print("[red]Error:[/red] this can't be an official run:", highlight=False)
+            for problem in problems:
+                console.print(f"  - {problem}", highlight=False, soft_wrap=True)
+            raise typer.Exit(code=1)
+        assert check is not None
+        guess = estimate([task_id for task_id, _ in attempts], settings.model, DEFAULT_TRACE_DIR)
+        console.print(
+            f"{heading} on {settings.provider} ({settings.tier} tier) / {settings.model}.\n"
+            f"Estimated: about {guess.tokens:,} tokens ({guess.input_tokens:,} in, {guess.output_tokens:,} out), "
+            f"about ${guess.cost_usd:.2f} at list prices, assuming no cache hits "
+            f"({guess.tasks_with_history} of {guess.tasks} attempt estimates come from earlier runs).",
+            highlight=False, soft_wrap=True,
+        )
+        if not yes and not typer.confirm("Start the official run?", default=False):
+            console.print("Cancelled; nothing was run.")
+            raise typer.Exit(code=1)
+        return check
+    check = check_tasks(tasks, read_manifest())
+    if not check.ok and not allow_modified:
+        listed = "\n  ".join(check.modified[:20]) + ("\n  ..." if len(check.modified) > 20 else "")
+        console.print(f"[red]Error:[/red] {len(check.modified)} task file(s) changed since the freeze "
+                      f"({DEFAULT_MANIFEST}):\n  {listed}\nTasks are frozen (see FREEZE.md). "
+                      "Pass --allow-modified to run anyway; the run's results will record it.", highlight=False)
+        raise typer.Exit(code=1)
+    if not check.ok:
+        console.print(f"[yellow]Warning:[/yellow] running with {len(check.modified)} task file(s) changed since the freeze.")
+    return check
+
+
+def _progress(repeats: int) -> Callable[[AgentResult], None]:
+    return lambda r: console.print(
+        f"  {r.task_id}" + (f" (repeat {r.repeat})" if repeats > 1 else "")
+        + f": [{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]")
+
+
+def _fail(message: str) -> NoReturn:
+    console.print(f"[red]Error:[/red] {message}", highlight=False, soft_wrap=True)
+    raise typer.Exit(code=1)
 
 
 def _print_summary(summary: RunSummary, cost_basis: str, run_type: str) -> None:
@@ -206,6 +281,9 @@ def _print_summary(summary: RunSummary, cost_basis: str, run_type: str) -> None:
             console.print(f"  {name}: {_rates(g)} | average steps {g['average_steps']:.1f}"
                           f" | average tokens {g['average_tokens']:,.0f} | total cost ${g['total_cost_usd']:.4f}",
                           soft_wrap=True)
+    if summary.stopped:
+        console.print(f"[yellow]Stopped early[/yellow] ({summary.stopped}). {len(summary.not_run)} attempt(s) not run; "
+                      f"finish them later with: akeso run --resume {summary.run_id}", highlight=False, soft_wrap=True)
     console.print(f"Run folder: {summary.run_dir}")
 
 
