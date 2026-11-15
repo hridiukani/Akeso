@@ -15,16 +15,6 @@ the engineering list.
   minutes", but each remaining task retries for about 2 minutes and then errors (17 tasks
   in the first calibration run). Stop the run instead, record the remaining tasks as not
   run (not as failures), and let `--resume` pick them up.
-- **Run fingerprint in summary.json.** Record everything that makes two runs comparable
-  under the Measurement rule: the provider, the Groq tier (free or Developer), the exact
-  model, the reasoning effort (not set today, so Groq's default for gpt-oss-120b), the
-  prompt version, the limits and the Docker image digest, alongside the task freeze
-  fingerprint (recorded since Topic 8, with line endings normalised).
-- **Record pacing waits per task and per run.** Token-aware pacing replaced the 429s (0 in
-  the Topic 7 smoke run) with up-front waits, which nothing records. Count them and their
-  seconds in each result and summary.json, so a slow run can be put down to the model or
-  to the quota.
-
 ## Polish topic
 
 - **`akeso doctor`.** One command that checks what a long run needs before it starts:
@@ -93,6 +83,14 @@ have recovered.
   loop ran a fourth step), then passed on every rerun. Its trace was already deleted. Now
   that pytest keeps failed tests' tmp folders (tmp_path_retention_policy = "failed"), look
   at the trace next time it fails. Likely load-sensitive timing in local mode.
+
+## Done in Topic 9 (measurement tools)
+
+- **Run fingerprint in summary.json.** Done (step 9.2): provider, tier, model, pinned model
+  settings, prompt version, limits, mode, sandbox image digest, suite freeze fingerprint,
+  harness commit and dirty flag.
+- **Record pacing waits per task and per run.** Done (step 9.2): count and seconds, per
+  task and in the run totals.
 
 ## Done in Topic 8 (the full suite)
 
