@@ -50,6 +50,7 @@ def run_tasks(
     on_result: Callable[[AgentResult], None] | None = None,
     freeze: dict[str, Any] | None = None,
     fingerprint: dict[str, Any] | None = None,
+    run_type: str = "dev",
 ) -> RunSummary:
     """Run each task in turn and write the run folder. A task that crashes is recorded
     as an error result rather than stopping the run."""
@@ -81,7 +82,7 @@ def run_tasks(
         results.append(result)
         if on_result:
             on_result(result)
-        _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze, fingerprint)
+        _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze, fingerprint, run_type)
 
     return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits))
 
@@ -130,9 +131,11 @@ def _write_summary(
     splits: Mapping[str, str],
     freeze: dict[str, Any] | None = None,
     fingerprint: dict[str, Any] | None = None,
+    run_type: str = "dev",
 ) -> None:
     summary = {
         "run_id": run_id,
+        "run_type": run_type,  # "official" (reportable) or "dev"
         "started": started,
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "provider": settings.provider,

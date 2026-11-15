@@ -1,6 +1,7 @@
 """The `akeso` command-line tool.
 
     akeso run --suite smoke [--model M] [--max-steps N] [--max-cost USD] [--run-id ID] [--allow-modified]
+    akeso run --suite full --official [--yes]
     akeso validate [--suite smoke]
     akeso freeze
     akeso trace RUN_ID TASK_ID [--full]
@@ -20,11 +21,13 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from akeso import fingerprint as run_fingerprint
 from akeso.batch import run_tasks
 from akeso.config import PRICES, ConfigError, Settings, load_settings
 from akeso.freeze import DEFAULT_MANIFEST, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest
 from akeso.grading import Verdict
-from akeso.sandbox import LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers
+from akeso.official import estimate, official_problems
+from akeso.sandbox import LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers, image_digest
 from akeso.suites import SuiteError, load_suite
 from akeso.tasks import TaskError, all_tasks, find_task
 from akeso.trace import DEFAULT_TRACE_DIR, read_trace, trace_path
@@ -81,11 +84,51 @@ def run(
     run_id: Optional[str] = typer.Option(None, "--run-id", help="Name for the run folder (default: timestamp)."),
     allow_modified: bool = typer.Option(
         False, "--allow-modified", help="Run even if task files changed since the freeze (recorded in the results)."),
+    official: bool = typer.Option(
+        False, "--official", help="An official (reportable) run: measurement setup, frozen suite, clean tree."),
+    yes: bool = typer.Option(False, "--yes", help="Don't ask for confirmation before an official run."),
 ) -> None:
     """Run the agent on every task in a suite and print the results."""
     task_ids = load_suite(suite)
     tasks = [find_task(task_id) for task_id in task_ids]  # report a bad suite before spending anything
-    check = check_tasks(tasks, read_manifest())
+    settings = load_settings()
+    if model:
+        settings = _with_model(settings, model)
+    limits = settings.limits
+    if max_steps is not None:
+        limits = replace(limits, max_steps=max_steps)
+    if max_cost is not None:
+        limits = replace(limits, max_cost_usd=max_cost)
+    fingerprint = run_fingerprint.collect(settings, limits, docker_image=image_digest())
+
+    if official:
+        try:
+            check = check_tasks(tasks, read_manifest())
+        except FreezeError:
+            check = None
+        overrides = [name for name, value in (("--model", model), ("--max-steps", max_steps), ("--max-cost", max_cost))
+                     if value is not None]
+        problems = official_problems(settings, limits, check, fingerprint, allow_modified=allow_modified, overrides=overrides)
+        if problems:
+            console.print("[red]Error:[/red] this can't be an official run:", highlight=False)
+            for problem in problems:
+                console.print(f"  - {problem}", highlight=False, soft_wrap=True)
+            raise typer.Exit(code=1)
+        assert check is not None
+        guess = estimate(task_ids, settings.model, DEFAULT_TRACE_DIR)
+        console.print(
+            f"Official run of [bold]{suite}[/bold]: {len(task_ids)} task(s) on {settings.provider} "
+            f"({settings.tier} tier) / {settings.model}.\n"
+            f"Estimated: about {guess.tokens:,} tokens ({guess.input_tokens:,} in, {guess.output_tokens:,} out), "
+            f"about ${guess.cost_usd:.2f} at list prices, assuming no cache hits "
+            f"({guess.tasks_with_history} of {guess.tasks} task estimates come from earlier runs).",
+            highlight=False, soft_wrap=True,
+        )
+        if not yes and not typer.confirm("Start the official run?", default=False):
+            console.print("Cancelled; nothing was run.")
+            raise typer.Exit(code=1)
+    else:
+        check = check_tasks(tasks, read_manifest())
     if not check.ok and not allow_modified:
         listed = "\n  ".join(check.modified[:20]) + ("\n  ..." if len(check.modified) > 20 else "")
         console.print(f"[red]Error:[/red] {len(check.modified)} task file(s) changed since the freeze "
@@ -96,22 +139,17 @@ def run(
         console.print(f"[yellow]Warning:[/yellow] running with {len(check.modified)} task file(s) changed since the freeze.")
     freeze = {"manifest_fingerprint": check.manifest_fingerprint, "allow_modified": allow_modified,
               "modified_files": check.modified}
-    settings = load_settings()
-    if model:
-        settings = _with_model(settings, model)
-    limits = settings.limits
-    if max_steps is not None:
-        limits = replace(limits, max_steps=max_steps)
-    if max_cost is not None:
-        limits = replace(limits, max_cost_usd=max_cost)
+    run_type = "official" if official else "dev"
 
-    console.print(f"Running suite [bold]{suite}[/bold] ({len(task_ids)} tasks) on {settings.provider} / {settings.model}")
+    console.print(f"Running suite [bold]{suite}[/bold] ({len(task_ids)} tasks) on {settings.provider} / {settings.model}"
+                  f" [bold]({run_type} run)[/bold]")
     summary = run_tasks(
         task_ids, run_id=run_id, settings=settings, limits=limits, freeze=freeze,
+        fingerprint=fingerprint, run_type=run_type,
         on_result=lambda r: console.print(f"  {r.task_id}: [{_VERDICT_STYLE[r.verdict]}]{r.verdict.value}[/]"),
     )
 
-    table = Table(title=f"Run {summary.run_id}")
+    table = Table(title=f"Run {summary.run_id} ({run_type})")
     for column, justify in (("Task", "left"), ("Verdict", "left"), ("Steps", "right"),
                             ("Tokens", "right"), ("Cost", "right"), ("Stop reason", "left")):
         table.add_column(column, justify=justify)

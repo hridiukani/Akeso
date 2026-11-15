@@ -1,5 +1,6 @@
 """Tests for the akeso command-line tool (run_tasks and Docker replaced by fakes)."""
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -51,6 +52,9 @@ def fake_run(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
     monkeypatch.setattr(cli, "load_settings", lambda: SETTINGS)
     monkeypatch.setattr(cli, "read_manifest", lambda: {})
+    monkeypatch.setattr(cli, "image_digest", lambda: "sha256:image")
+    monkeypatch.setattr(cli.run_fingerprint, "collect", lambda settings, limits, docker_image=None: dict(
+        calls.get("fingerprint", {"harness_commit": "c" * 40, "harness_dirty": False}), docker_image=docker_image))
     monkeypatch.setattr(cli, "check_tasks", lambda tasks, manifest: calls.get("freeze_check", FreezeCheck("fp-123")))
     monkeypatch.setattr(cli, "load_suite", fixed_suite)
     return calls
@@ -196,7 +200,58 @@ def test_allow_modified_runs_and_is_recorded(fake_run) -> None:
 def test_run_without_a_manifest_is_a_clear_error(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setattr(cli, "load_suite", fixed_suite)
     monkeypatch.setattr(cli, "read_manifest", lambda: read_manifest(tmp_path / "manifest.json"))
+    monkeypatch.setattr(cli, "load_settings", lambda: SETTINGS)
+    monkeypatch.setattr(cli, "image_digest", lambda: "sha256:image")
 
     out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
 
     assert out.exit_code == 1 and "No freeze manifest" in out.output
+
+
+DEVELOPER = replace(SETTINGS, groq_tier="developer")
+
+
+def test_official_run_refuses_the_free_tier_and_says_why(fake_run) -> None:
+    fake_run["fingerprint"] = {"harness_commit": "c" * 40, "harness_dirty": True}
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official", "--max-steps", "5"])
+
+    assert out.exit_code == 1 and "this can't be an official run" in out.output
+    assert "the Groq tier is 'free'; official runs need the 'developer' tier" in out.output
+    assert "--max-steps can't be used with --official" in out.output
+    assert "uncommitted changes" in out.output
+    assert "task_ids" not in fake_run  # nothing ran
+
+
+def test_official_run_shows_an_estimate_and_can_be_cancelled(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_settings", lambda: DEVELOPER)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official"], input="n\n")
+
+    assert out.exit_code == 1
+    assert "Official run of smoke: 3 task(s) on groq (developer tier) / openai/gpt-oss-120b." in out.output
+    assert "Estimated: about" in out.output and "at list prices" in out.output
+    assert "Cancelled; nothing was run." in out.output and "task_ids" not in fake_run
+
+
+def test_confirmed_official_run_is_labelled_official(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_settings", lambda: DEVELOPER)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official"], input="y\n")
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["run_type"] == "official" and "(official run)" in out.output
+
+
+def test_yes_skips_the_confirmation(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_settings", lambda: DEVELOPER)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official", "--yes"])
+
+    assert out.exit_code == 0 and "Start the official run?" not in out.output and fake_run["run_type"] == "official"
+
+
+def test_ordinary_runs_are_labelled_dev(fake_run) -> None:
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 0 and fake_run["run_type"] == "dev" and "(dev run)" in out.output
