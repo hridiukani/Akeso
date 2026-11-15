@@ -259,3 +259,15 @@ def test_provider_token_limit_is_its_own_stop_reason_and_a_failure(task_dir: Pat
     assert not result.passed  # ...but the run counts as a failure
     assert result.detail.startswith("Stopped at step 2: Groq refused the request as too large (HTTP 413). Counted as a failure.")
     assert "The changes made before that: Graded in a fresh environment" in result.detail
+
+
+def test_pacing_waits_and_cached_tokens_are_totalled_per_task(task_dir: Path, tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    responses = [
+        replace(tool_reply(FIX, usage=Usage(1000, 20, cache_read_tokens=600)), pacing_waits=1, pacing_wait_seconds=2.5),
+        replace(tool_reply(CHECKS, usage=Usage(1200, 20, cache_read_tokens=900)), pacing_waits=2, pacing_wait_seconds=1.25),
+    ]
+    result, _, _ = run(task_dir, tmp_path, responses)
+
+    assert (result.pacing_waits, result.pacing_wait_seconds, result.cached_input_tokens) == (3, 3.75, 1500)

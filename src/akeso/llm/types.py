@@ -106,6 +106,8 @@ class ModelResponse:
     usage: Usage = field(default_factory=lambda: Usage(input_tokens=0, output_tokens=0))
     stop_reason: StopReason = "end_turn"
     rate_limit_retries: int = 0  # times the provider waited and retried after HTTP 429
+    pacing_waits: int = 0  # times we waited before sending, to stay inside the rate limits
+    pacing_wait_seconds: float = 0.0  # how long those waits took in total
     raw: tuple[Any, ...] = ()  # the provider's own content blocks, see Message.raw
 
     def as_message(self) -> Message:

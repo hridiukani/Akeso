@@ -190,3 +190,42 @@ def test_default_model_settings_are_explicit() -> None:
     ask(provider)
 
     assert (sent[0]["temperature"], sent[0]["reasoning_effort"], sent[0]["max_completion_tokens"]) == (1.0, "medium", 8192)
+
+
+def test_cached_tokens_are_read_from_the_usage_details() -> None:
+    cached = NS(choices=OK.choices, usage=NS(prompt_tokens=5000, completion_tokens=10,
+                                             prompt_tokens_details=NS(cached_tokens=3000)))
+    provider, _ = provider_with([cached])
+
+    usage = ask(provider).usage
+
+    assert (usage.input_tokens, usage.cache_read_tokens, usage.output_tokens) == (5000, 3000, 10)
+
+
+def test_missing_cache_details_count_as_zero() -> None:
+    provider, _ = provider_with([OK])  # no prompt_tokens_details at all
+
+    assert ask(provider).usage.cache_read_tokens == 0
+
+
+def test_cached_input_is_priced_at_the_cached_rate() -> None:
+    from akeso.llm.cost import cost_usd
+    from akeso.llm.types import Usage
+
+    # 5,000 input of which 3,000 cached: 2,000 x $0.15 + 3,000 x $0.075, plus 10 x $0.60, per million.
+    usage = Usage(input_tokens=5000, output_tokens=10, cache_read_tokens=3000)
+
+    assert cost_usd("openai/gpt-oss-120b", usage) == pytest.approx((2000 * 0.15 + 3000 * 0.075 + 10 * 0.60) / 1e6)
+
+
+def test_quota_waits_are_reported_on_the_response() -> None:
+    low = {"x-ratelimit-limit-tokens": "8000", "x-ratelimit-remaining-tokens": "100", "x-ratelimit-reset-tokens": "30s"}
+    sleeps: list[float] = []
+    provider = GroqProvider(api_key="fake", model="openai/gpt-oss-120b", sleep=sleeps.append, clock=lambda: 0.0)
+    replies = [(OK, low), (OK, {})]
+    provider._send = lambda request: replies.pop(0)
+
+    first, second = ask(provider), ask(provider)
+
+    assert first.pacing_waits == 0
+    assert second.pacing_waits == 1 and second.pacing_wait_seconds == pytest.approx(sleeps[0])

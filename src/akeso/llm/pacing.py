@@ -11,7 +11,7 @@ import json
 import re
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from akeso.llm.provider import Provider
 from akeso.llm.types import Message, ModelResponse, ToolDefinition
@@ -39,12 +39,18 @@ class PacedProvider:
         messages: Sequence[Message],
         tools: Sequence[ToolDefinition] | None = None,
     ) -> ModelResponse:
+        wait = 0.0
         if self._last_start is not None:
             wait = self.min_interval - (self._clock() - self._last_start)
             if wait > 0:
                 self._sleep(wait)
         self._last_start = self._clock()
-        return self.inner.complete(system, messages, tools)
+        response = self.inner.complete(system, messages, tools)
+        if wait <= 0:
+            return response
+        # Add this wait to any the provider made itself (e.g. for its token quota).
+        return replace(response, pacing_waits=response.pacing_waits + 1,
+                       pacing_wait_seconds=response.pacing_wait_seconds + wait)
 
 
 @dataclass(frozen=True)

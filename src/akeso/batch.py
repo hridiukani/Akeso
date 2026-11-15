@@ -109,6 +109,9 @@ def _totals(results: Sequence[AgentResult]) -> dict[str, Any]:
         "total_output_tokens": sum(r.output_tokens for r in results),
         "total_cost_usd": sum(r.cost_usd for r in results),
         "total_rate_limit_retries": sum(r.rate_limit_retries for r in results),
+        "total_pacing_waits": sum(r.pacing_waits for r in results),
+        "total_pacing_wait_seconds": round(sum(r.pacing_wait_seconds for r in results), 3),
+        "total_cached_input_tokens": sum(r.cached_input_tokens for r in results),
         "provider_token_limit": sum(r.stop_reason is StopReason.PROVIDER_TOKEN_LIMIT for r in results),
     }
 

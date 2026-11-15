@@ -94,3 +94,15 @@ def test_min_call_interval_follows_the_active_provider(provider: str, expected: 
     settings = Settings(provider=provider, groq_model="m", anthropic_model="m")
 
     assert settings.min_call_interval == expected
+
+
+def test_pacing_waits_are_reported_on_the_response() -> None:
+    clock = FakeClock()
+    provider, _ = paced(2.0, clock)
+
+    first = provider.complete("sys", [Message.user("hi")])
+    clock.now += 0.5
+    second = provider.complete("sys", [Message.user("hi")])
+
+    assert (first.pacing_waits, first.pacing_wait_seconds) == (0, 0.0)
+    assert (second.pacing_waits, second.pacing_wait_seconds) == (1, pytest.approx(1.5))

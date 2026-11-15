@@ -70,6 +70,9 @@ class AgentResult:
     tampering: list[str] = field(default_factory=list)  # what was detected, if anything
     warnings: list[str] = field(default_factory=list)  # checks that couldn't run (not tampering)
     rate_limit_retries: int = 0  # times the provider had to wait after HTTP 429 during this task
+    pacing_waits: int = 0  # times we waited before a call to stay inside the rate limits
+    pacing_wait_seconds: float = 0.0
+    cached_input_tokens: int = 0  # input tokens served from the provider's prompt cache
     detail: str = ""  # human-readable explanation of the outcome
     run_id: str = ""
     trace_path: str = ""  # the JSON Lines trace of this run
@@ -126,7 +129,8 @@ def run_agent(
     # How the task is checked: its test command, or (SQL) a comparison with the gold query.
     sql_check = SqlCheck(task) if task.spec.kind == "sql" else None
     check: Check = sql_check or (lambda e, **kwargs: e.run_checks(**kwargs))
-    steps = input_tokens = output_tokens = rate_limit_retries = 0
+    steps = input_tokens = output_tokens = rate_limit_retries = pacing_waits = cached_input_tokens = 0
+    pacing_wait_seconds = 0.0
     cost = 0.0
     stop, detail = StopReason.ERROR, ""
 
@@ -138,7 +142,8 @@ def run_agent(
             outcome = AgentResult(
                 task_id=task.id, passed=passed, verdict=verdict, stop_reason=stop_reason,
                 steps=steps, input_tokens=input_tokens, output_tokens=output_tokens, cost_usd=cost,
-                rate_limit_retries=rate_limit_retries,
+                rate_limit_retries=rate_limit_retries, pacing_waits=pacing_waits,
+                pacing_wait_seconds=round(pacing_wait_seconds, 3), cached_input_tokens=cached_input_tokens,
                 provider=settings.provider, model=settings.model, environment=env.kind,
                 prompt_version=AGENT_PROMPT_VERSION,
                 visible_passed=graded.visible_passed if graded else False,
@@ -183,6 +188,9 @@ def run_agent(
                     steps += 1
                     input_tokens += response.usage.input_tokens
                     rate_limit_retries += response.rate_limit_retries
+                    pacing_waits += response.pacing_waits
+                    pacing_wait_seconds += response.pacing_wait_seconds
+                    cached_input_tokens += response.usage.cache_read_tokens
                     output_tokens += response.usage.output_tokens
                     call_cost = cost_usd(settings.model, response.usage)
                     cost += call_cost
@@ -194,6 +202,7 @@ def run_agent(
                         cache_read_tokens=response.usage.cache_read_tokens,
                         total_tokens=input_tokens + output_tokens, total_cost_usd=cost,
                         stop_reason=response.stop_reason, rate_limit_retries=response.rate_limit_retries,
+                        pacing_waits=response.pacing_waits, pacing_wait_seconds=round(response.pacing_wait_seconds, 3),
                         text=response.text,
                         tool_calls=[{"id": c.id, "name": c.name, "arguments": c.arguments} for c in response.tool_calls],
                     )

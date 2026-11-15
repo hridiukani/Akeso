@@ -96,7 +96,10 @@ class GroqProvider:
             logger.debug("Waiting %.1fs for Groq's token quota to refill", wait)
             self._sleep(wait)
         response, rate_limit_retries = self._create_with_retry(request)
-        return replace(_from_openai_response(response), rate_limit_retries=rate_limit_retries)
+        return replace(
+            _from_openai_response(response), rate_limit_retries=rate_limit_retries,
+            pacing_waits=int(wait > 0), pacing_wait_seconds=max(wait, 0.0),
+        )
 
     def _create_with_retry(self, request: dict[str, Any]) -> tuple[Any, int]:
         """Call the API and return (response, number of rate-limit retries), retrying in
@@ -218,11 +221,20 @@ def _from_openai_response(response: Any) -> ModelResponse:
         text=message.content or "",
         tool_calls=tool_calls,
         usage=Usage(
-            input_tokens=usage.prompt_tokens if usage else 0,
+            input_tokens=usage.prompt_tokens if usage else 0,  # cached tokens included
             output_tokens=usage.completion_tokens if usage else 0,
+            cache_read_tokens=_cached_tokens(usage),
         ),
         stop_reason=_STOP_REASONS.get(choice.finish_reason, "other"),
     )
+
+
+def _cached_tokens(usage: Any) -> int:
+    """Input tokens Groq served from its prompt cache (priced at the cached rate), from
+    usage.prompt_tokens_details.cached_tokens; 0 when it isn't reported."""
+    details = getattr(usage, "prompt_tokens_details", None) if usage else None
+    cached = getattr(details, "cached_tokens", None) if details else None
+    return int(cached) if isinstance(cached, (int, float)) else 0
 
 
 def _parse_arguments(tool_name: str, raw: str | None) -> dict[str, Any]:
