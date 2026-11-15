@@ -24,8 +24,11 @@ def new_run_id() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(3)
 
 
-def trace_path(trace_dir: Path, run_id: str, task_id: str) -> Path:
-    return trace_dir / run_id / f"{task_id}.jsonl"
+def trace_path(trace_dir: Path, run_id: str, task_id: str, repeat: int = 1) -> Path:
+    """Where a task's trace goes. Repeat 1 keeps the plain name, so single runs (and runs
+    from before repeats existed) look the same; later repeats add .r2, .r3 and so on."""
+    name = f"{task_id}.jsonl" if repeat == 1 else f"{task_id}.r{repeat}.jsonl"
+    return trace_dir / run_id / name
 
 
 class TraceWriter:

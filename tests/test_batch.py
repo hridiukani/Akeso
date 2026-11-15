@@ -56,7 +56,11 @@ def test_summary_file_has_results_and_totals(tasks_root: Path, tmp_path: Path) -
     assert data["results"][0]["verdict"] == "passed" and data["results"][0]["split"] == "dev"
     by_split = data["totals"].pop("by_split")
     assert by_split == {"dev": data["totals"]}  # both test tasks are dev
-    assert data["totals"] == {
+    assert (data["totals"]["attempts"], data["totals"]["repeats"], data["repeats"]) == (2, 1, 1)
+    assert {key: data["totals"][key] for key in (
+        "tasks", "passed", "failed", "tampered", "pass_rate", "average_steps", "total_input_tokens",
+        "total_output_tokens", "total_cost_usd", "total_rate_limit_retries", "total_pacing_waits",
+        "total_pacing_wait_seconds", "total_cached_input_tokens", "provider_token_limit")} == {
         "tasks": 2, "passed": 1, "failed": 1, "tampered": 0, "pass_rate": 0.5,
         "average_steps": 1.5, "total_input_tokens": 300, "total_output_tokens": 60,
         "total_cost_usd": pytest.approx(300 * 0.15e-6 + 60 * 0.60e-6),  # Groq Developer tier rates
@@ -174,3 +178,31 @@ def test_summary_records_the_fingerprint_and_cost_basis(tasks_root: Path, tmp_pa
     assert fp["docker_image"] is None  # fake environments have no image
     assert len(fp["harness_commit"]) == 40 and isinstance(fp["harness_dirty"], bool)
     assert data["cost_basis"] == "estimated (not billed)"
+
+
+def test_repeats_run_every_task_again_in_fresh_sandboxes(tasks_root: Path, tmp_path: Path) -> None:
+    # Repeat 1: t001 fixed, t002 gives up. Repeat 2: t001 gives up, t002 gives up.
+    factory = FakeFactory(checks=judge)
+    responses = [tool_reply(FIX), tool_reply(("run_checks", {})), text_reply("no"), text_reply("no"), text_reply("no")]
+    summary = run_tasks(
+        ["t001_fixable", "t002_hopeless"], run_id="run-1", runs_dir=tmp_path / "runs", settings=SETTINGS,
+        provider=ScriptedProvider(responses), environment_factory=factory, tasks_root=tasks_root, repeats=2,
+    )
+
+    assert [(r.task_id, r.repeat, r.passed) for r in summary.results] == [
+        ("t001_fixable", 1, True), ("t002_hopeless", 1, False), ("t001_fixable", 2, False), ("t002_hopeless", 2, False)]
+    assert len(factory.created) == 8  # an agent and a grading sandbox per attempt
+    assert sorted(p.name for p in summary.run_dir.glob("*.jsonl")) == [
+        "t001_fixable.jsonl", "t001_fixable.r2.jsonl", "t002_hopeless.jsonl", "t002_hopeless.r2.jsonl"]
+    t = summary.totals
+    assert (t["tasks"], t["attempts"], t["repeats"], t["k"]) == (2, 4, 2, 2)
+    assert t["solve_rates"] == {"t001_fixable": "1/2", "t002_hopeless": "0/2"}
+    assert t["pass_rates_by_repeat"] == [0.5, 0.0]
+    assert t["pass_rate_mean"] == 0.25 and t["pass_rate_std"] == pytest.approx(0.35355, abs=1e-4)
+    assert t["pass_at_1"] == 0.25 and t["pass_at_k"] == 0.5
+    assert read_summary(summary.run_dir)["repeats"] == 2
+
+
+def test_repeats_must_be_positive(tasks_root: Path, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        run(tasks_root, tmp_path, [], repeats=0)

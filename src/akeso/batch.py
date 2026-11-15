@@ -24,6 +24,7 @@ from akeso.prompts import AGENT_PROMPT_VERSION
 from akeso import fingerprint as run_fingerprint
 from akeso.sandbox import DockerSandbox, cleanup_leftover_containers, image_digest
 from akeso.tasks import DEFAULT_TASKS_ROOT, find_task
+from akeso.stats import mean_and_std, pass_at, solve_counts
 from akeso.trace import DEFAULT_TRACE_DIR, new_run_id
 
 SUMMARY_FILE = "summary.json"
@@ -51,9 +52,14 @@ def run_tasks(
     freeze: dict[str, Any] | None = None,
     fingerprint: dict[str, Any] | None = None,
     run_type: str = "dev",
+    repeats: int = 1,
 ) -> RunSummary:
-    """Run each task in turn and write the run folder. A task that crashes is recorded
-    as an error result rather than stopping the run."""
+    """Run each task `repeats` times, each attempt in fresh sandboxes, and write the run
+    folder. The suite is run once per repeat (repeat 1 for every task, then repeat 2, ...),
+    so an interrupted run still holds whole passes. A task that crashes is recorded as an
+    error result rather than stopping the run."""
+    if repeats < 1:
+        raise ValueError("repeats must be at least 1")
     tasks = [find_task(task_id, tasks_root) for task_id in task_ids]  # fail fast on a bad id
     splits = {task.id: task.spec.split for task in tasks}
     settings = settings or load_settings()
@@ -71,18 +77,20 @@ def run_tasks(
 
     started = datetime.now(timezone.utc).isoformat(timespec="seconds")
     results: list[AgentResult] = []
-    for task in tasks:
-        try:
-            result = run_agent(
-                task.root, settings=settings, provider=provider, limits=limits,
-                environment_factory=environment_factory, run_id=run_id, trace_dir=runs_dir,
-            )
-        except Exception as problem:  # e.g. Docker went away: record it and carry on
-            result = _error_result(task.id, settings, run_id, f"{type(problem).__name__}: {problem}")
-        results.append(result)
-        if on_result:
-            on_result(result)
-        _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze, fingerprint, run_type)
+    for repeat in range(1, repeats + 1):
+        for task in tasks:
+            try:
+                result = run_agent(
+                    task.root, settings=settings, provider=provider, limits=limits,
+                    environment_factory=environment_factory, run_id=run_id, trace_dir=runs_dir, repeat=repeat,
+                )
+            except Exception as problem:  # e.g. Docker went away: record it and carry on
+                result = _error_result(task.id, settings, run_id, f"{type(problem).__name__}: {problem}", repeat)
+            results.append(result)
+            if on_result:
+                on_result(result)
+            _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze, fingerprint,
+                           run_type, repeats)
 
     return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits))
 
@@ -101,16 +109,36 @@ def summarize(results: Sequence[AgentResult], splits: Mapping[str, str] | None =
 
 
 def _totals(results: Sequence[AgentResult]) -> dict[str, Any]:
+    """Counts are per attempt; with several repeats, solve rates, the pass rate's spread
+    across repeats, pass@1 and pass@k describe the tasks (see stats.py)."""
     count = len(results)
     # r.passed, not the verdict: a run stopped by the provider's token limit is a failure.
     passed = sum(r.passed for r in results)
+    counts = solve_counts((r.task_id, r.passed) for r in results)
+    repeats = max((n for _, n in counts.values()), default=0)
+    per_repeat = []
+    for repeat in sorted({r.repeat for r in results}):
+        attempts = [r for r in results if r.repeat == repeat]
+        per_repeat.append(sum(r.passed for r in attempts) / len(attempts))
+    rate_mean, rate_std = mean_and_std(per_repeat)
     return {
-        "tasks": count,
+        "tasks": len(counts),
+        "attempts": count,
+        "repeats": repeats,
         "passed": passed,
         "failed": sum(not r.passed and r.verdict is not Verdict.TAMPERED for r in results),
         "tampered": sum(r.verdict is Verdict.TAMPERED for r in results),
         "pass_rate": passed / count if count else 0.0,
+        "pass_rate_mean": rate_mean,  # mean over repeats of each repeat's pass rate
+        "pass_rate_std": rate_std,  # their sample standard deviation (0 with one repeat)
+        "pass_rates_by_repeat": per_repeat,
+        "pass_at_1": pass_at(counts, 1),
+        "pass_at_k": pass_at(counts, repeats) if repeats else 0.0,
+        "k": repeats,
+        "solve_rates": {task: f"{c}/{n}" for task, (c, n) in sorted(counts.items())},
         "average_steps": sum(r.steps for r in results) / count if count else 0.0,
+        "average_tokens": sum(r.input_tokens + r.output_tokens for r in results) / count if count else 0.0,
+        "average_cost_usd": sum(r.cost_usd for r in results) / count if count else 0.0,
         "total_input_tokens": sum(r.input_tokens for r in results),
         "total_output_tokens": sum(r.output_tokens for r in results),
         "total_cost_usd": sum(r.cost_usd for r in results),
@@ -132,10 +160,12 @@ def _write_summary(
     freeze: dict[str, Any] | None = None,
     fingerprint: dict[str, Any] | None = None,
     run_type: str = "dev",
+    repeats: int = 1,
 ) -> None:
     summary = {
         "run_id": run_id,
         "run_type": run_type,  # "official" (reportable) or "dev"
+        "repeats": repeats,  # attempts planned per task
         "started": started,
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "provider": settings.provider,
@@ -155,8 +185,9 @@ def _write_summary(
     temporary.replace(run_dir / SUMMARY_FILE)
 
 
-def _error_result(task_id: str, settings: Settings, run_id: str, detail: str) -> AgentResult:
+def _error_result(task_id: str, settings: Settings, run_id: str, detail: str, repeat: int = 1) -> AgentResult:
     return AgentResult(
+        repeat=repeat,
         task_id=task_id, passed=False, verdict=Verdict.FAILED, stop_reason=StopReason.ERROR,
         steps=0, input_tokens=0, output_tokens=0, cost_usd=0.0,
         provider=settings.provider, model=settings.model, environment="unknown",

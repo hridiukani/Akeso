@@ -163,3 +163,12 @@ def test_story_shows_the_check_when_the_model_stops(task_dir: Path, tmp_path: Pa
 
     assert "Check after the model stopped: PASSED" in text
     assert "RESULT: PASSED  (verdict: passed, stop reason: passed)" in text
+
+
+def test_trace_path_names_later_repeats() -> None:
+    from pathlib import Path
+
+    from akeso.trace import trace_path
+
+    assert trace_path(Path("runs"), "r", "c001").name == "c001.jsonl"
+    assert trace_path(Path("runs"), "r", "c001", 3).name == "c001.r3.jsonl"

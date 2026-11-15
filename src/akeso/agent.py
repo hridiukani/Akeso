@@ -76,6 +76,7 @@ class AgentResult:
     detail: str = ""  # human-readable explanation of the outcome
     run_id: str = ""
     trace_path: str = ""  # the JSON Lines trace of this run
+    repeat: int = 1  # which attempt at this task within the run (1, 2, ...)
 
 
 class RepeatedFailureDetector:
@@ -107,6 +108,7 @@ def run_agent(
     environment_factory: EnvironmentFactory = DockerSandbox,
     run_id: str | None = None,
     trace_dir: str | Path = DEFAULT_TRACE_DIR,
+    repeat: int = 1,
 ) -> AgentResult:
     """Run the agent on one task, then grade its changes in a fresh environment.
 
@@ -123,7 +125,7 @@ def run_agent(
     provider = provider or get_provider(settings)
     env = environment_factory()
     run_id = run_id or new_run_id()
-    path = trace_path(Path(trace_dir), run_id, task.id)
+    path = trace_path(Path(trace_dir), run_id, task.id, repeat)
     stuck = RepeatedFailureDetector(limits.repeated_failure_limit)
     tools = tool_definitions(env.kind, task.spec.kind)  # descriptions must match where commands really run
     # How the task is checked: its test command, or (SQL) a comparison with the gold query.
@@ -150,7 +152,7 @@ def run_agent(
                 hidden_passed=graded.hidden_passed if graded else None,
                 tampering=[str(finding) for finding in graded.tampering] if graded else [],
                 warnings=list(graded.warnings) if graded else [],
-                detail=detail, run_id=run_id, trace_path=path.as_posix(),
+                detail=detail, run_id=run_id, trace_path=path.as_posix(), repeat=repeat,
             )
             trace.event("result", **asdict(outcome))
             return outcome
