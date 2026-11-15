@@ -271,3 +271,27 @@ def test_pacing_waits_and_cached_tokens_are_totalled_per_task(task_dir: Path, tm
     result, _, _ = run(task_dir, tmp_path, responses)
 
     assert (result.pacing_waits, result.pacing_wait_seconds, result.cached_input_tokens) == (3, 3.75, 1500)
+
+
+class QuotaProvider(TooLargeProvider):
+    """Answers with the given replies, then reports the quota used up for the day."""
+
+    def complete(self, system, messages, tools=None):
+        from akeso.llm.types import QuotaExhaustedError
+
+        if not self.replies:
+            raise QuotaExhaustedError("Groq's quota is used up for about 7 minute(s)", wait_seconds=432)
+        return super().complete(system, messages, tools)
+
+
+def test_exhausted_quota_abandons_the_attempt_without_grading(task_dir: Path, tmp_path: Path) -> None:
+    from akeso.llm.types import QuotaExhaustedError
+
+    factory = FakeFactory(checks=judge)
+    with pytest.raises(QuotaExhaustedError):
+        run_agent(task_dir, settings=GROQ, provider=QuotaProvider([tool_reply(FIX)]),
+                  environment_factory=factory, trace_dir=tmp_path / "runs", run_id="r")
+
+    assert len(factory.created) == 1  # only the agent's environment: nothing was graded
+    events = [line for line in (tmp_path / "runs" / "r").glob("*.jsonl")][0].read_text(encoding="utf-8")
+    assert "QuotaExhaustedError" in events

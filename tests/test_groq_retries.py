@@ -11,7 +11,7 @@ except ImportError:
     import httpx
 
 from akeso.llm.groq_provider import GroqProvider, RateLimitExhausted, ToolCallRejected
-from akeso.llm.types import Message
+from akeso.llm.types import Message, QuotaExhaustedError
 
 OK = NS(
     choices=[NS(message=NS(content="done", tool_calls=None), finish_reason="stop")],
@@ -229,3 +229,49 @@ def test_quota_waits_are_reported_on_the_response() -> None:
 
     assert first.pacing_waits == 0
     assert second.pacing_waits == 1 and second.pacing_wait_seconds == pytest.approx(sleeps[0])
+
+
+def daily_limit(message: str, retry_after: str | None = None) -> openai.RateLimitError:
+    headers = {"retry-after": retry_after} if retry_after else {}
+    raw = httpx.Response(429, headers=headers, request=httpx.Request("POST", "https://api.groq.com"))
+    return openai.RateLimitError(message, response=raw, body=None)
+
+
+TPD = ("Rate limit reached for model `openai/gpt-oss-120b` on tokens per day (TPD): Limit 200000, "
+       "Used 199500, Requested 3000. Please try again in 7m12.5s.")
+
+
+def test_a_long_wait_in_the_message_means_the_quota_is_exhausted() -> None:
+    provider, sleeps = provider_with([daily_limit(TPD)])
+
+    with pytest.raises(QuotaExhaustedError, match="used up for about 7 minute") as caught:
+        ask(provider)
+    assert caught.value.wait_seconds == pytest.approx(432.5)
+    assert sleeps == []  # gives up at once instead of sleeping through it
+
+
+def test_a_long_retry_after_header_means_the_quota_is_exhausted() -> None:
+    provider, _ = provider_with([daily_limit("rate limited", retry_after="3600")])
+
+    with pytest.raises(QuotaExhaustedError):
+        ask(provider)
+
+
+def test_a_short_wait_is_still_retried() -> None:
+    provider, sleeps = provider_with([daily_limit("Please try again in 2.5s."), OK], quota_wait_limit=60)
+
+    assert ask(provider).text == "done"
+    assert len(sleeps) == 1
+
+
+@pytest.mark.parametrize("message, seconds", [
+    ("Please try again in 1h2m3s.", 3723.0),
+    ("Please try again in 45m.", 2700.0),
+    ("Please try again in 860ms.", 0.86),
+    ("Please try again in 7m12.5s.", 432.5),
+    ("rate limited", None),
+])
+def test_server_wait_is_read_from_the_message(message: str, seconds: float | None) -> None:
+    from akeso.llm.groq_provider import _server_wait
+
+    assert _server_wait(daily_limit(message)) == seconds

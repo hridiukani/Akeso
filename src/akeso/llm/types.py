@@ -25,6 +25,16 @@ class ProviderTokenLimitError(Exception):
     has outgrown what this provider can serve."""
 
 
+class QuotaExhaustedError(Exception):
+    """The provider's quota is used up for longer than is worth waiting for (e.g. Groq's
+    tokens-per-day limit). Not the task's fault: the attempt is abandoned, not graded, so a
+    later --resume can run it again from the start."""
+
+    def __init__(self, message: str, wait_seconds: float | None = None) -> None:
+        super().__init__(message)
+        self.wait_seconds = wait_seconds  # how long the provider asked us to wait, if known
+
+
 @dataclass(frozen=True)
 class ToolCall:
     """A request from the model to run one of our tools."""

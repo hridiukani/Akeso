@@ -19,7 +19,7 @@ from akeso.environment import Environment
 from akeso.grading import GradeResult, Verdict, collect_changes, grade
 from akeso.llm.cost import cost_usd
 from akeso.llm.provider import Provider, get_provider
-from akeso.llm.types import Message, ProviderTokenLimitError
+from akeso.llm.types import Message, ProviderTokenLimitError, QuotaExhaustedError
 from akeso.prompts import AGENT_PROMPT_VERSION, build_first_message, build_sql_first_message, system_prompt
 from akeso.sandbox import DockerSandbox
 from akeso.sql_judge import SqlCheck, comparison_rules, support_files
@@ -247,6 +247,10 @@ def run_agent(
                 stop = StopReason.PROVIDER_TOKEN_LIMIT
                 detail = f"Stopped at step {steps + 1}: {problem} Counted as a failure."
                 trace.event("error", step=steps, error=str(problem))
+            except QuotaExhaustedError as problem:
+                # Not the task's fault, so not a result: the batch records it as not run.
+                trace.event("error", step=steps, error=f"QuotaExhaustedError: {problem}")
+                raise
             except Exception as problem:  # e.g. the provider gave up after rate limits
                 stop, detail = StopReason.ERROR, f"{type(problem).__name__}: {problem}"
                 trace.event("error", step=steps, error=detail)

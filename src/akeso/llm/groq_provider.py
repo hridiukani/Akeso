@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
@@ -18,6 +19,7 @@ from akeso.llm.types import (
     Message,
     ModelResponse,
     ProviderTokenLimitError,
+    QuotaExhaustedError,
     StopReason,
     ToolCall,
     ToolDefinition,
@@ -58,6 +60,7 @@ class GroqProvider:
         max_tool_call_attempts: int = 3,
         clock: Callable[[], float] = time.monotonic,
         model_settings: ModelSettings = ModelSettings(),
+        quota_wait_limit: float = 120.0,
     ) -> None:
         self.model = model
         self.model_settings = model_settings
@@ -65,6 +68,9 @@ class GroqProvider:
         self.max_tool_call_attempts = max_tool_call_attempts
         self.base_delay = base_delay
         self.max_delay = max_delay
+        # A 429 asking for a longer wait than this (e.g. the daily token limit) means the
+        # quota is used up: stop rather than sleep through it.
+        self.quota_wait_limit = quota_wait_limit
         self._sleep = sleep  # injectable so tests don't actually wait
         # Groq reports its remaining quota in response headers; waiting for it to refill
         # before a call that would exceed it avoids most HTTP 429s.
@@ -118,6 +124,12 @@ class GroqProvider:
                 return response, rate_limited
             except openai.RateLimitError as error:
                 self.budget.update(RateLimitHeaders.parse(error.response.headers))
+                server_wait = _server_wait(error)
+                if server_wait is not None and server_wait > self.quota_wait_limit:
+                    raise QuotaExhaustedError(
+                        f"Groq's quota is used up for about {server_wait / 60:.0f} minute(s) "
+                        f"(HTTP 429): {error.message}", wait_seconds=server_wait,
+                    ) from error
                 rate_limited += 1
                 if rate_limited >= self.max_attempts:
                     raise RateLimitExhausted(
@@ -162,6 +174,26 @@ class GroqProvider:
         backoff = self.base_delay * 2 ** (attempt - 1)  # 1s, 2s, 4s, ...
         # Jitter spreads out retries so parallel runs don't all hit the limit at once.
         return min(backoff, self.max_delay) + random.uniform(0, self.base_delay)
+
+
+def _server_wait(error: openai.RateLimitError) -> float | None:
+    """How long Groq asks us to wait: the retry-after header, or the "try again in 7m12.5s"
+    in its message (the daily limit's 429 says so in the message). None if it doesn't say."""
+    retry_after = error.response.headers.get("retry-after")
+    if retry_after:
+        try:
+            return float(retry_after)
+        except ValueError:
+            pass
+    match = _TRY_AGAIN.search(str(error.message))
+    if not match or not any(match.groups()):
+        return None
+    hours, minutes, seconds, millis = (float(part) if part else 0.0 for part in match.groups())
+    return hours * 3600 + minutes * 60 + seconds + millis / 1000
+
+
+# "1h2m3.5s", "7m12.5s", "45m", "860ms" ("m" followed by "s" is milliseconds, not minutes).
+_TRY_AGAIN = re.compile(r"try again in (?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s|([\d.]+)ms)?")
 
 
 def _to_openai_messages(system: str, messages: Sequence[Message]) -> list[dict[str, Any]]:
