@@ -206,3 +206,100 @@ def test_repeats_run_every_task_again_in_fresh_sandboxes(tasks_root: Path, tmp_p
 def test_repeats_must_be_positive(tasks_root: Path, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="at least 1"):
         run(tasks_root, tmp_path, [], repeats=0)
+
+
+FINGERPRINT = {"provider": "groq", "model": "openai/gpt-oss-120b", "harness_commit": "abc", "harness_dirty": False}
+
+
+class QuotaAfter(ScriptedProvider):
+    """Scripted replies, then the provider's daily quota is used up."""
+
+    def complete(self, system, messages, tools=None):
+        from akeso.llm.types import QuotaExhaustedError
+
+        if len(self.calls) >= len(self.responses):
+            raise QuotaExhaustedError("Groq's quota is used up for about 7 minute(s)")
+        return super().complete(system, messages, tools)
+
+
+def interrupted_run(tasks_root: Path, tmp_path: Path, **kwargs):
+    """t001 is fixed, then the quota runs out during t002's first attempt."""
+    return run_tasks(
+        ["t001_fixable", "t002_hopeless"], run_id="run-1", runs_dir=tmp_path / "runs", settings=SETTINGS,
+        provider=QuotaAfter([tool_reply(FIX), tool_reply(("run_checks", {}))]),
+        environment_factory=FakeFactory(checks=judge), tasks_root=tasks_root, fingerprint=FINGERPRINT, **kwargs,
+    )
+
+
+def test_exhausted_quota_stops_the_run_and_lists_what_was_not_run(tasks_root: Path, tmp_path: Path) -> None:
+    summary = interrupted_run(tasks_root, tmp_path, repeats=2)
+
+    assert [(r.task_id, r.repeat) for r in summary.results] == [("t001_fixable", 1)]
+    assert summary.not_run == [("t002_hopeless", 1), ("t001_fixable", 2), ("t002_hopeless", 2)]
+    assert summary.stopped.startswith("quota exhausted: Groq's quota is used up")
+    data = read_summary(summary.run_dir)
+    assert data["complete"] is False and data["stopped"] == summary.stopped
+    assert data["not_run"][0] == {"task_id": "t002_hopeless", "repeat": 1}
+    assert data["task_ids"] == ["t001_fixable", "t002_hopeless"]
+
+
+def test_a_finished_run_is_complete(tasks_root: Path, tmp_path: Path) -> None:
+    summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {})), text_reply("no")])
+
+    data = read_summary(summary.run_dir)
+    assert (data["complete"], data["stopped"], data["not_run"]) == (True, None, [])
+
+
+def test_resume_runs_only_what_is_missing(tasks_root: Path, tmp_path: Path) -> None:
+    interrupted_run(tasks_root, tmp_path)
+    factory = FakeFactory(checks=judge)
+
+    summary = batch.resume_tasks(
+        "run-1", fingerprint=FINGERPRINT, runs_dir=tmp_path / "runs", settings=SETTINGS,
+        provider=ScriptedProvider([text_reply("I give up.")]), environment_factory=factory, tasks_root=tasks_root,
+    )
+
+    assert [(r.task_id, r.passed) for r in summary.results] == [("t001_fixable", True), ("t002_hopeless", False)]
+    assert len(factory.created) == 2  # only t002 ran again
+    assert summary.not_run == [] and summary.stopped is None
+    data = read_summary(summary.run_dir)
+    assert data["complete"] is True and len(data["resumed"]) == 1
+    assert data["totals"]["attempts"] == 2
+    # The half-written trace of the abandoned attempt was replaced, not appended to.
+    trace = (summary.run_dir / "t002_hopeless.jsonl").read_text(encoding="utf-8")
+    assert "QuotaExhaustedError" not in trace and trace.count('"event": "run_start"') <= 1
+
+
+def test_resume_reruns_crashed_attempts(tasks_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = batch.run_agent
+    monkeypatch.setattr(batch, "run_agent", lambda task_dir, **kw: (_ for _ in ()).throw(RuntimeError("Docker went away")))
+    run(tasks_root, tmp_path, [], fingerprint=FINGERPRINT)
+    monkeypatch.setattr(batch, "run_agent", real)
+
+    summary = batch.resume_tasks(
+        "run-1", fingerprint=FINGERPRINT, runs_dir=tmp_path / "runs", settings=SETTINGS,
+        provider=ScriptedProvider([text_reply("no"), text_reply("no")]),
+        environment_factory=FakeFactory(checks=judge), tasks_root=tasks_root,
+    )
+
+    assert [r.stop_reason.value for r in summary.results] == ["gave_up", "gave_up"]
+
+
+def test_resume_refuses_a_different_setup(tasks_root: Path, tmp_path: Path) -> None:
+    interrupted_run(tasks_root, tmp_path)
+
+    with pytest.raises(batch.ResumeError, match="harness_commit: 'abc' then, 'def' now"):
+        batch.resume_tasks("run-1", fingerprint={**FINGERPRINT, "harness_commit": "def"}, runs_dir=tmp_path / "runs",
+                           settings=SETTINGS, provider=ScriptedProvider([]), tasks_root=tasks_root)
+
+
+def test_resume_needs_an_existing_run(tmp_path: Path) -> None:
+    with pytest.raises(batch.ResumeError, match="no readable summary"):
+        batch.resume_tasks("nope", fingerprint=FINGERPRINT, runs_dir=tmp_path / "runs", settings=SETTINGS)
+
+
+def test_results_survive_the_round_trip_through_summary_json(tasks_root: Path, tmp_path: Path) -> None:
+    summary = interrupted_run(tasks_root, tmp_path)
+
+    saved = read_summary(summary.run_dir)["results"][0]
+    assert batch.result_from_dict(saved) == summary.results[0]

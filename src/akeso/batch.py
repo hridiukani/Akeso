@@ -1,17 +1,19 @@
 """Run many tasks under one run ID, with everything for the run in one folder.
 
     runs/<run_id>/
-        <task_id>.jsonl   one trace per task
-        summary.json      every task's result plus the totals (rewritten after each task)
+        <task_id>.jsonl   one trace per task (<task_id>.r2.jsonl for repeat 2, ...)
+        summary.json      every attempt's result plus the totals (rewritten after each one)
 
-Tasks run one at a time, sharing one (paced) provider.
+Tasks run one at a time, sharing one (paced) provider. If the provider's quota runs out,
+the run stops cleanly and lists the attempts it didn't get to as "not_run";
+resume_tasks finishes those later, along with any that crashed.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,14 +22,24 @@ from akeso.agent import AgentResult, EnvironmentFactory, StopReason, run_agent
 from akeso.config import AgentLimits, Settings, load_settings
 from akeso.grading import Verdict
 from akeso.llm.provider import Provider, get_provider
+from akeso.llm.types import QuotaExhaustedError
 from akeso.prompts import AGENT_PROMPT_VERSION
 from akeso import fingerprint as run_fingerprint
 from akeso.sandbox import DockerSandbox, cleanup_leftover_containers, image_digest
 from akeso.tasks import DEFAULT_TASKS_ROOT, find_task
 from akeso.stats import mean_and_std, pass_at, solve_counts
-from akeso.trace import DEFAULT_TRACE_DIR, new_run_id
+from akeso.trace import DEFAULT_TRACE_DIR, new_run_id, trace_path
 
 SUMMARY_FILE = "summary.json"
+
+# Resuming needs the same experiment and the same code: every fingerprint field.
+RESUME_FIELDS = run_fingerprint.EXPERIMENT_FIELDS + ("harness_commit", "harness_dirty")
+
+Attempt = tuple[str, int]  # (task id, repeat)
+
+
+class ResumeError(Exception):
+    """A run can't be resumed (missing, or set up differently from now)."""
 
 
 @dataclass(frozen=True)
@@ -36,6 +48,8 @@ class RunSummary:
     run_dir: Path
     results: list[AgentResult]
     totals: dict[str, Any]
+    not_run: list[Attempt] = field(default_factory=list)  # attempts left for --resume
+    stopped: str | None = None  # why the run stopped early, if it did
 
 
 def run_tasks(
@@ -61,7 +75,6 @@ def run_tasks(
     if repeats < 1:
         raise ValueError("repeats must be at least 1")
     tasks = [find_task(task_id, tasks_root) for task_id in task_ids]  # fail fast on a bad id
-    splits = {task.id: task.spec.split for task in tasks}
     settings = settings or load_settings()
     limits = limits or settings.limits
     provider = provider or get_provider(settings)  # shared, so pacing spans the whole run
@@ -75,24 +88,132 @@ def run_tasks(
         docker_image = image_digest() if environment_factory is DockerSandbox else None
         fingerprint = run_fingerprint.collect(settings, limits, docker_image=docker_image)
 
-    started = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    results: list[AgentResult] = []
-    for repeat in range(1, repeats + 1):
-        for task in tasks:
-            try:
-                result = run_agent(
-                    task.root, settings=settings, provider=provider, limits=limits,
-                    environment_factory=environment_factory, run_id=run_id, trace_dir=runs_dir, repeat=repeat,
-                )
-            except Exception as problem:  # e.g. Docker went away: record it and carry on
-                result = _error_result(task.id, settings, run_id, f"{type(problem).__name__}: {problem}", repeat)
-            results.append(result)
-            if on_result:
-                on_result(result)
-            _write_summary(run_dir, run_id, started, settings, limits, results, splits, freeze, fingerprint,
-                           run_type, repeats)
+    header = {
+        "run_id": run_id,
+        "run_type": run_type,  # "official" (reportable) or "dev"
+        "repeats": repeats,  # attempts planned per task
+        "task_ids": [task.id for task in tasks],
+        "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "resumed": [],
+        # How the run's tasks compared with the freeze manifest (None when not checked).
+        "freeze": freeze,
+        "fingerprint": fingerprint,
+    }
+    plan = [(task.id, repeat) for repeat in range(1, repeats + 1) for task in tasks]
+    return _run_attempts(plan, [], header, run_dir, {task.id: task for task in tasks}, settings, limits,
+                         provider, environment_factory, runs_dir, on_result)
 
-    return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits))
+
+def resume_tasks(
+    run_id: str,
+    *,
+    fingerprint: dict[str, Any],
+    runs_dir: str | Path = DEFAULT_TRACE_DIR,
+    settings: Settings | None = None,
+    provider: Provider | None = None,
+    limits: AgentLimits | None = None,
+    environment_factory: EnvironmentFactory = DockerSandbox,
+    tasks_root: str | Path = DEFAULT_TASKS_ROOT,
+    on_result: Callable[[AgentResult], None] | None = None,
+) -> RunSummary:
+    """Finish an earlier run: rerun the attempts it never got to or that crashed (stop
+    reason "error"), keep every other result, and rewrite its summary. Refuses unless
+    `fingerprint` (of the setup now) matches the run's in every field."""
+    run_dir = Path(runs_dir) / run_id
+    saved = load_for_resume(run_id, runs_dir)
+    changed = resume_differences(saved, fingerprint)
+    if changed:
+        raise ResumeError(f"run {run_id!r} was set up differently, so resuming would mix two experiments "
+                          f"({'; '.join(changed)})")
+    settings = settings or load_settings()
+    limits = limits or settings.limits
+    plan = planned_attempts(saved)
+    tasks = {task_id: find_task(task_id, tasks_root) for task_id in dict.fromkeys(t for t, _ in plan)}
+    kept, todo = split_attempts(saved)
+    for task_id, repeat in todo:  # traces are appended to, so clear any partial one first
+        trace_path(Path(runs_dir), run_id, task_id, repeat).unlink(missing_ok=True)
+    header = {name: saved.get(name) for name in ("run_id", "run_type", "repeats", "started", "freeze", "fingerprint")}
+    header["task_ids"] = list(tasks)
+    header["resumed"] = [*(saved.get("resumed") or []), datetime.now(timezone.utc).isoformat(timespec="seconds")]
+    provider = provider or get_provider(settings)
+    if environment_factory is DockerSandbox:
+        cleanup_leftover_containers()
+    return _run_attempts(todo, kept, header, run_dir, tasks, settings, limits, provider, environment_factory,
+                         runs_dir, on_result)
+
+
+def load_for_resume(run_id: str, runs_dir: str | Path = DEFAULT_TRACE_DIR) -> dict[str, Any]:
+    """The saved summary of the run to resume."""
+    run_dir = Path(runs_dir) / run_id
+    try:
+        return read_summary(run_dir)
+    except (OSError, json.JSONDecodeError) as problem:
+        raise ResumeError(f"no readable summary for run {run_id!r} in {run_dir}") from problem
+
+
+def resume_differences(saved: dict[str, Any], fingerprint: dict[str, Any]) -> list[str]:
+    """How the setup now differs from the saved run's, one line per field (empty if it doesn't)."""
+    then = saved.get("fingerprint") or {}
+    return [f"{name}: {then.get(name)!r} then, {fingerprint.get(name)!r} now"
+            for name in run_fingerprint.differences(then, fingerprint, RESUME_FIELDS)]
+
+
+def planned_attempts(saved: dict[str, Any]) -> list[Attempt]:
+    """Every (task, repeat) the run set out to do, in running order. Runs from before
+    task_ids were recorded fall back to the tasks in their results."""
+    task_ids = saved.get("task_ids") or list(dict.fromkeys(r["task_id"] for r in saved.get("results", [])))
+    repeats = saved.get("repeats") or 1
+    return [(task_id, repeat) for repeat in range(1, repeats + 1) for task_id in task_ids]
+
+
+def split_attempts(saved: dict[str, Any]) -> tuple[list[AgentResult], list[Attempt]]:
+    """(results to keep, attempts to run again): crashed attempts (stop reason "error")
+    and attempts with no result are run again."""
+    kept = [result_from_dict(r) for r in saved.get("results", []) if r.get("stop_reason") != StopReason.ERROR.value]
+    done = {(r.task_id, r.repeat) for r in kept}
+    return kept, [attempt for attempt in planned_attempts(saved) if attempt not in done]
+
+
+def result_from_dict(data: dict[str, Any]) -> AgentResult:
+    """An AgentResult back from its summary.json form."""
+    known = {f.name for f in fields(AgentResult)}
+    values = {name: value for name, value in data.items() if name in known}
+    values["verdict"] = Verdict(values["verdict"])
+    values["stop_reason"] = StopReason(values["stop_reason"])
+    return AgentResult(**values)
+
+
+def _run_attempts(
+    todo: Sequence[Attempt], results: list[AgentResult], header: dict[str, Any], run_dir: Path,
+    tasks: Mapping[str, Any], settings: Settings, limits: AgentLimits, provider: Provider,
+    environment_factory: EnvironmentFactory, runs_dir: str | Path,
+    on_result: Callable[[AgentResult], None] | None,
+) -> RunSummary:
+    """Run the attempts in order after the results already in hand, rewriting the summary
+    after each one. Stops early, listing what's left as not run, if the quota runs out."""
+    splits = {task_id: task.spec.split for task_id, task in tasks.items()}
+    run_id = header["run_id"]
+    not_run: list[Attempt] = []
+    stopped = None
+    _write_summary(run_dir, header, settings, limits, results, splits, list(todo), None)
+    for index, (task_id, repeat) in enumerate(todo):
+        try:
+            result = run_agent(
+                tasks[task_id].root, settings=settings, provider=provider, limits=limits,
+                environment_factory=environment_factory, run_id=run_id, trace_dir=runs_dir, repeat=repeat,
+            )
+        except QuotaExhaustedError as problem:
+            not_run, stopped = list(todo[index:]), f"quota exhausted: {problem}"
+            break
+        except Exception as problem:  # e.g. Docker went away: record it and carry on
+            result = _error_result(task_id, settings, run_id, f"{type(problem).__name__}: {problem}", repeat)
+        results.append(result)
+        if on_result:
+            on_result(result)
+        _write_summary(run_dir, header, settings, limits, results, splits, list(todo[index + 1:]), None)
+    _write_summary(run_dir, header, settings, limits, results, splits, not_run, stopped)
+    return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits),
+                      not_run=not_run, stopped=stopped)
 
 
 def summarize(results: Sequence[AgentResult], splits: Mapping[str, str] | None = None) -> dict[str, Any]:
@@ -155,27 +276,24 @@ def read_summary(run_dir: str | Path) -> dict[str, Any]:
 
 
 def _write_summary(
-    run_dir: Path, run_id: str, started: str, settings: Settings, limits: AgentLimits, results: list[AgentResult],
-    splits: Mapping[str, str],
-    freeze: dict[str, Any] | None = None,
-    fingerprint: dict[str, Any] | None = None,
-    run_type: str = "dev",
-    repeats: int = 1,
+    run_dir: Path, header: dict[str, Any], settings: Settings, limits: AgentLimits, results: list[AgentResult],
+    splits: Mapping[str, str], not_run: list[Attempt], stopped: str | None,
 ) -> None:
+    """While a run is going, not_run lists what's still to do, so a run that dies outright
+    (killed, power cut) can be resumed too."""
     summary = {
-        "run_id": run_id,
-        "run_type": run_type,  # "official" (reportable) or "dev"
-        "repeats": repeats,  # attempts planned per task
-        "started": started,
+        **{name: header[name] for name in ("run_id", "run_type", "repeats", "task_ids", "started", "resumed")},
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "provider": settings.provider,
         "model": settings.model,
         "prompt_version": AGENT_PROMPT_VERSION,
-        # How the run's tasks compared with the freeze manifest (None when not checked).
-        "freeze": freeze,
-        "fingerprint": fingerprint,
+        "freeze": header["freeze"],
+        "fingerprint": header["fingerprint"],
         "cost_basis": settings.cost_basis,
         "limits": asdict(limits),
+        "complete": not not_run,
+        "stopped": stopped,
+        "not_run": [{"task_id": task_id, "repeat": repeat} for task_id, repeat in not_run],
         "totals": summarize(results, splits),
         "results": [{**asdict(r), "split": splits.get(r.task_id)} for r in results],
     }
