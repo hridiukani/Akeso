@@ -33,6 +33,9 @@ OFFICIAL_REPEATS = 3
 # averaged about 20,000 tokens per task, roughly 90% of them input).
 FALLBACK_INPUT_TOKENS = 18_000
 FALLBACK_OUTPUT_TOKENS = 2_000
+# One-shot attempts are one call: about 1,600 tokens each in the free-tier rehearsal.
+FALLBACK_ONESHOT_INPUT_TOKENS = 1_500
+FALLBACK_ONESHOT_OUTPUT_TOKENS = 600
 
 
 def official_problems(
@@ -93,11 +96,15 @@ class Estimate:
         return self.input_tokens + self.output_tokens
 
 
-def estimate(task_ids: Sequence[str], model: str, runs_dir: str | Path, repeats: int = 1) -> Estimate:
-    """Expected tokens and cost: each task's median from earlier runs in runs_dir (any
-    model, since this only sizes the attempt), or a typical attempt without history. Cost
-    assumes no cache hits, so it errs high."""
-    history = _history(Path(runs_dir))
+def estimate(
+    task_ids: Sequence[str], model: str, runs_dir: str | Path, repeats: int = 1, mode: str = "loop",
+) -> Estimate:
+    """Expected tokens and cost: each task's median from earlier runs in the same mode in
+    runs_dir (any model, since this only sizes the attempt), or a typical attempt without
+    history. Cost assumes no cache hits, so it errs high."""
+    history = _history(Path(runs_dir), mode)
+    fallback_in, fallback_out = ((FALLBACK_ONESHOT_INPUT_TOKENS, FALLBACK_ONESHOT_OUTPUT_TOKENS) if mode == "oneshot"
+                                 else (FALLBACK_INPUT_TOKENS, FALLBACK_OUTPUT_TOKENS))
     price = PRICES[model]
     total_in = total_out = known = 0
     for task_id in task_ids:
@@ -107,23 +114,26 @@ def estimate(task_ids: Sequence[str], model: str, runs_dir: str | Path, repeats:
             total_in += int(statistics.median(r[0] for r in runs))
             total_out += int(statistics.median(r[1] for r in runs))
         else:
-            total_in += FALLBACK_INPUT_TOKENS
-            total_out += FALLBACK_OUTPUT_TOKENS
+            total_in += fallback_in
+            total_out += fallback_out
     total_in, total_out = total_in * repeats, total_out * repeats
     cost = (total_in * price.input_per_mtok + total_out * price.output_per_mtok) / 1_000_000
     return Estimate(total_in, total_out, cost, known, len(task_ids))
 
 
-def _history(runs_dir: Path) -> dict[str, list[tuple[int, int]]]:
-    """(input, output) tokens of every recorded attempt per task, skipping attempts that
-    never reached the model (crashes, quota errors)."""
+def _history(runs_dir: Path, mode: str = "loop") -> dict[str, list[tuple[int, int]]]:
+    """(input, output) tokens of every recorded attempt per task in runs of this mode (runs
+    from before modes existed were loop runs), skipping attempts that never reached the
+    model (crashes, quota errors)."""
     found: dict[str, list[tuple[int, int]]] = {}
     for path in sorted(runs_dir.glob("*/summary.json")):
         try:
-            results = json.loads(path.read_text(encoding="utf-8")).get("results", [])
+            summary = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        for r in results:
+        if (summary.get("mode") or "loop") != mode:
+            continue
+        for r in summary.get("results", []):
             if r.get("steps", 0) > 0 and r.get("input_tokens", 0) > 0:
                 found.setdefault(r["task_id"], []).append((r["input_tokens"], r["output_tokens"]))
     return found

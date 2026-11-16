@@ -44,10 +44,10 @@ def test_each_problem_is_named(change: dict, expected: str) -> None:
     assert any(expected in problem for problem in found), found
 
 
-def write_run(runs: Path, name: str, rows: list[tuple[str, int, int, int]]) -> None:
+def write_run(runs: Path, name: str, rows: list[tuple[str, int, int, int]], **fields) -> None:
     (runs / name).mkdir(parents=True)
     results = [{"task_id": t, "steps": steps, "input_tokens": i, "output_tokens": o} for t, steps, i, o in rows]
-    (runs / name / "summary.json").write_text(json.dumps({"results": results}))
+    (runs / name / "summary.json").write_text(json.dumps({"results": results, **fields}))
 
 
 def test_estimate_uses_the_median_of_earlier_runs(tmp_path: Path) -> None:
@@ -61,3 +61,12 @@ def test_estimate_uses_the_median_of_earlier_runs(tmp_path: Path) -> None:
     assert guess.input_tokens == 3 * (2000 + FALLBACK_INPUT_TOKENS)
     assert guess.output_tokens == 3 * (200 + FALLBACK_OUTPUT_TOKENS)
     assert guess.cost_usd == pytest.approx((guess.input_tokens * 0.15 + guess.output_tokens * 0.60) / 1e6)
+
+
+def test_estimate_only_uses_runs_in_the_same_mode(tmp_path: Path) -> None:
+    write_run(tmp_path, "loop", [("c001", 4, 5000, 500)])
+    write_run(tmp_path, "oneshot", [("c001", 1, 1000, 400)], mode="oneshot")
+
+    assert estimate(["c001"], "openai/gpt-oss-120b", tmp_path).input_tokens == 5000
+    assert estimate(["c001"], "openai/gpt-oss-120b", tmp_path, mode="oneshot").input_tokens == 1000
+    assert estimate(["c002"], "openai/gpt-oss-120b", tmp_path, mode="oneshot").input_tokens == 1500

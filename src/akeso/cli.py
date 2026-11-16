@@ -209,7 +209,8 @@ def _check_before_running(
                 console.print(f"  - {problem}", highlight=False, soft_wrap=True)
             raise typer.Exit(code=1)
         assert check is not None
-        guess = estimate([task_id for task_id, _ in attempts], settings.model, DEFAULT_TRACE_DIR)
+        guess = estimate([task_id for task_id, _ in attempts], settings.model, DEFAULT_TRACE_DIR,
+                         mode=fingerprint.get("mode") or "loop")
         console.print(
             f"{heading} on {settings.provider} ({settings.tier} tier) / {settings.model}.\n"
             f"Estimated: about {guess.tokens:,} tokens ({guess.input_tokens:,} in, {guess.output_tokens:,} out), "
