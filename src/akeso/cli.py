@@ -4,6 +4,7 @@
     akeso run --suite full --official [--yes] [--repeats N]
     akeso run --suite smoke --mode oneshot
     akeso run --resume RUN_ID [--yes]
+    akeso compare RUN_A RUN_B
     akeso trace RUN_ID TASK_ID [--repeat N]
     akeso validate [--suite smoke]
     akeso freeze
@@ -31,6 +32,7 @@ from akeso.batch import (
     MODES, ResumeError, RunSummary, load_for_resume, planned_attempts, resume_differences, resume_tasks, run_tasks,
     saved_mode, split_attempts,
 )
+from akeso.compare import CompareError, compare_runs
 from akeso.config import PRICES, ConfigError, Settings, load_settings
 from akeso.freeze import (
     DEFAULT_MANIFEST, FreezeCheck, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest,
@@ -324,6 +326,69 @@ def freeze() -> None:
     write_manifest(manifest)
     console.print(f"Froze {len(manifest['tasks'])} tasks ({len(manifest['files'])} files) into {DEFAULT_MANIFEST}. "
                   f"Fingerprint: {manifest['fingerprint']}")
+
+
+@app.command()
+@_friendly_errors
+def compare(
+    run_a: str = typer.Argument(..., help="The baseline run."),
+    run_b: str = typer.Argument(..., help="The run compared against it."),
+    runs_dir: Path = typer.Option(DEFAULT_TRACE_DIR, "--runs-dir", help="Where run folders live."),
+) -> None:
+    """Compare run B with run A: pass rates with their spread, the difference with a
+    bootstrap interval, steps, tokens and cost, overall and per split."""
+    try:
+        result = compare_runs(run_a, run_b, runs_dir)
+    except CompareError as problem:
+        _fail(f"can't compare {run_a} and {run_b}: {problem}")
+    for warning in result.warnings:
+        console.print(f"[yellow]Warning:[/yellow] {warning}", highlight=False, soft_wrap=True)
+
+    table = Table(title=f"Pass rates: {run_b} (B) vs {run_a} (A)")
+    for column, justify in (("Group", "left"), ("Tasks", "right"), ("A", "right"), ("B", "right"),
+                            ("B - A", "right"), ("95% CI", "right")):
+        table.add_column(column, justify=justify)
+    for g in result.groups:
+        table.add_row(g.name, str(g.tasks), _spread(g.a), _spread(g.b), f"{g.difference:+.0%}",
+                      f"[{g.ci_low:+.0%}, {g.ci_high:+.0%}]")
+    console.print(table)
+    console.print("B - A is the change in mean solve rate over the tasks in both runs; the interval is a paired "
+                  "bootstrap over tasks. An interval that includes 0 means the runs aren't clearly different.",
+                  soft_wrap=True)
+
+    costs = Table(title="Per attempt (A -> B)")
+    for column, justify in (("Group", "left"), ("Avg steps", "right"), ("Avg tokens", "right"), ("Avg cost", "right")):
+        costs.add_column(column, justify=justify)
+    for g in result.groups:
+        costs.add_row(
+            g.name,
+            _change(g.a["average_steps"], g.b["average_steps"], "{:.1f}"),
+            _change(g.a["average_tokens"], g.b["average_tokens"], "{:,.0f}"),
+            _change(g.a["average_cost_usd"], g.b["average_cost_usd"], "${:.4f}"),
+        )
+    console.print(costs)
+
+    if result.changed:
+        changes = Table(title="Tasks whose solve rate changed")
+        for column in ("Task", "Split", "A", "B"):
+            changes.add_column(column)
+        for c in result.changed:
+            changes.add_row(c.task_id, c.split or "", c.a, c.b)
+        console.print(changes)
+    else:
+        console.print("No task's solve rate changed.")
+
+
+def _spread(totals: dict[str, Any]) -> str:
+    """A group's pass rate: mean and spread over repeats, or just the rate for one."""
+    if totals.get("repeats", 1) > 1:
+        return f"{totals['pass_rate_mean']:.0%} +/- {totals['pass_rate_std']:.0%} (x{totals['repeats']})"
+    return f"{totals['pass_rate']:.0%}"
+
+
+def _change(a: float, b: float, fmt: str) -> str:
+    """"A -> B" for a per-attempt average."""
+    return f"{fmt.format(a)} -> {fmt.format(b)}"
 
 
 @app.command()

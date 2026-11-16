@@ -1,5 +1,6 @@
 """Tests for the akeso command-line tool (run_tasks and Docker replaced by fakes)."""
 
+import json
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -401,3 +402,37 @@ def test_resume_uses_the_saved_mode(fake_run, saved_run) -> None:
 
     assert out.exit_code == 0, out.output
     assert fake_run["resumed"] == "run-old" and fake_run["fingerprint"]["mode"] == "oneshot"
+
+
+def write_run(runs: Path, run_id: str, passes: list[bool], **fingerprint) -> None:
+    results = [replace(result("c001_mean", Verdict.PASSED if ok else Verdict.FAILED, 3, 1000,
+                              StopReason.PASSED if ok else StopReason.GAVE_UP), repeat=rep)
+               for rep, ok in enumerate(passes, start=1)]
+    data = {"run_id": run_id, "run_type": "dev", "complete": True,
+            "fingerprint": {"suite_freeze_fingerprint": "fp", "model": "openai/gpt-oss-120b", **fingerprint},
+            "totals": summarize(results, {"c001_mean": "dev"}),
+            "results": [{**asdict(r), "split": "dev"} for r in results]}
+    (runs / run_id).mkdir(parents=True)
+    (runs / run_id / "summary.json").write_text(json.dumps(data, default=str), encoding="utf-8")
+
+
+def test_compare_prints_the_difference_and_changed_tasks(tmp_path: Path) -> None:
+    write_run(tmp_path, "a", [False, False])
+    write_run(tmp_path, "b", [True, False], model="llama")
+
+    out = runner.invoke(cli.app, ["compare", "a", "b", "--runs-dir", str(tmp_path)], env={"COLUMNS": "200"})
+
+    assert out.exit_code == 0, out.output
+    assert "1,100 -> 1,100" in out.output
+    assert "model differs" in out.output and "a is a dev run" in out.output
+    assert "0% +/- 0% (x2)" in out.output and "50% +/- 71% (x2)" in out.output and "+50%" in out.output
+    assert "Tasks whose solve rate changed" in out.output and "0/2" in out.output and "1/2" in out.output
+
+
+def test_compare_refuses_different_suites(tmp_path: Path) -> None:
+    write_run(tmp_path, "a", [True])
+    write_run(tmp_path, "b", [True], suite_freeze_fingerprint="other")
+
+    out = runner.invoke(cli.app, ["compare", "a", "b", "--runs-dir", str(tmp_path)])
+
+    assert out.exit_code == 1 and "different suites" in out.output
