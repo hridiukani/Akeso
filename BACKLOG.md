@@ -15,8 +15,34 @@ the engineering list.
   dev); it isn't specific to either task. Smoke is now dev-only (c010 and s011 replace them) and dev runs
   refuse held-out tasks without `--include-heldout`.
 
+## After the first official run
+
+- **Check prompt caching.** Free-tier responses never reported cached tokens, so the
+  official estimate assumes no cache hits and may be high. After the baseline, look at
+  `total_cached_input_tokens` in its summary: if Groq caches on the Developer tier, price
+  the estimate with cache hits.
+- **Check the cost against Groq's dashboard.** Compare the run's recorded cost (from our
+  per-model price table) with what Groq's billing dashboard charged for it, and fix the
+  price table if they differ.
+
+## Before reporting results (Topic 10)
+
+- **Nested resampling for the confidence interval.** `akeso compare` resamples tasks only,
+  using each task's solve rate as fixed, so it ignores the noise between repeats of the
+  same task. Before results are reported, resample at both levels (tasks, then the repeats
+  within each drawn task) so the interval reflects both sources of variation.
+
 ## Polish topic
 
+- **Retire the old one-shot tool.** `oneshot.py` (the earlier one-shot script) has its own,
+  stricter copy of the reply parser; `oneshot_agent.py` is what `--mode oneshot` uses.
+  Remove the old one or make it use the new parser, so the two can't drift apart.
+- **Resuming a dev run after a commit.** Resume refuses any change of harness commit, even
+  a docs-only one. That's right for official runs; dev runs could take an
+  `--allow-new-commit` option (recorded in the summary).
+- **Clean up on Ctrl+C.** Interrupting `akeso run` can leave the in-flight attempt's sandbox
+  container running until the hourly sweep or `akeso cleanup`. Catch the interrupt, stop
+  the container, and keep the summary resumable.
 - **`akeso doctor`.** One command that checks what a long run needs before it starts:
   Docker running (Docker Desktop stopped between sessions three times in Topic 8), the
   sandbox image built, the freeze manifest present and matching, the active provider's key
