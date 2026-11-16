@@ -47,6 +47,15 @@ def run_checks(
     )
 
 
+# pytest -q's short summary: "FAILED tests/test_x.py::test_y - message" or "ERROR tests/test_x.py".
+_FAILING_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.MULTILINE)
+
+
+def failing_tests(output: str) -> list[str]:
+    """The tests pytest reports as failed or errored, sorted (from its short summary)."""
+    return sorted(set(_FAILING_TEST.findall(output)))
+
+
 def trim_output(output: str, limit: int = DEFAULT_OUTPUT_LIMIT) -> str:
     """Keep the last `limit` characters of output, prefixed by a one-line trim marker.
 

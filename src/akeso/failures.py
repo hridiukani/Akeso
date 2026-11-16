@@ -9,6 +9,7 @@ in this order:
     edit_failed_to_apply      one-shot: the reply had no usable files
     visible_pass_hidden_fail  the visible checks pass but the hidden ones don't (overfitting)
     broke_other_test          a visible test that passed before the change fails after it
+                              (from the result's full list of initially failing tests)
     sql_error                 the final query doesn't run
     max_steps, max_cost, max_tokens, repeated_failure, gave_up
                               the loop stopped for that reason with the checks still failing
@@ -23,7 +24,6 @@ labels.yaml, one line per attempt (".r2" for repeat 2, as in the trace names):
 
 from __future__ import annotations
 
-import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -31,6 +31,7 @@ from typing import Any
 
 import yaml
 
+from akeso.checks import failing_tests
 from akeso.trace import read_trace
 
 LABELS_FILE = "labels.yaml"
@@ -42,9 +43,6 @@ CATEGORIES = (
 )
 _STOPPED_BY = {"max_steps", "max_cost", "max_tokens", "repeated_failure", "gave_up"}
 
-# pytest -q's short summary: "FAILED tests/test_x.py::test_y - message" or "ERROR tests/test_x.py".
-_FAILING_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.MULTILINE)
-
 
 class LabelsError(ValueError):
     """labels.yaml can't be used."""
@@ -52,7 +50,9 @@ class LabelsError(ValueError):
 
 def categorize(result: Mapping[str, Any], trace: Iterable[Mapping[str, Any]] = ()) -> str | None:
     """The category of one attempt (a result as in summary.json), or None if it passed.
-    The trace (its events) is needed to spot broke_other_test and sql_error."""
+    The trace (its events) is needed to spot broke_other_test and sql_error. Results from
+    before initial_failing_tests was recorded fall back to the trace's initial check, which
+    is cut short for long output."""
     if result.get("passed"):
         return None
     stop = result.get("stop_reason")
@@ -72,8 +72,12 @@ def categorize(result: Mapping[str, Any], trace: Iterable[Mapping[str, Any]] = (
         if grading.get("task_kind") == "sql":
             if "failed to run" in visible:
                 return "sql_error"
-        elif initial is not None and _failing_tests(visible) - _failing_tests(str(initial.get("output") or "")):
-            return "broke_other_test"
+        else:
+            before = result.get("initial_failing_tests")
+            if before is None and initial is not None:
+                before = failing_tests(str(initial.get("output") or ""))
+            if before is not None and set(failing_tests(visible)) - set(before):
+                return "broke_other_test"
     if stop in _STOPPED_BY:
         return stop
     return "wrong_result"
@@ -128,10 +132,6 @@ def _initial_and_grading(trace: Iterable[Mapping[str, Any]]) -> tuple[Mapping[st
         elif event.get("event") == "grading":
             grading = event
     return initial, grading
-
-
-def _failing_tests(output: str) -> set[str]:
-    return set(_FAILING_TEST.findall(output))
 
 
 def _trace_events(result: Mapping[str, Any], run_dir: Path) -> list[dict[str, Any]]:

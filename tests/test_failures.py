@@ -87,3 +87,14 @@ def test_bad_labels_files(tmp_path: Path, content: str, message: str) -> None:
 
 def test_no_labels_file_means_no_overrides(tmp_path: Path) -> None:
     assert read_labels(tmp_path) == {}
+
+
+def test_the_recorded_initial_failures_beat_a_trimmed_trace() -> None:
+    # The trace kept only the end of the initial output, so test_one's line was cut off.
+    trimmed = "[...5000 characters trimmed ...]\nFAILED tests/test_a.py::test_two - boom\n2 failed"
+    after = "FAILED tests/test_a.py::test_one - assert\nFAILED tests/test_a.py::test_two - boom\n2 failed"
+    full = ["tests/test_a.py::test_one", "tests/test_a.py::test_two"]
+
+    assert categorize(result(), trace(trimmed, after)) == "broke_other_test"  # old runs: a false alarm
+    assert categorize(result(initial_failing_tests=full), trace(trimmed, after)) == "max_steps"
+    assert categorize(result(initial_failing_tests=full[:1]), trace(trimmed, after)) == "broke_other_test"

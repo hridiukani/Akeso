@@ -124,3 +124,9 @@ def test_parse_reply_accepts_a_header_without_its_closing_marker() -> None:
     reply = block("src/stats.py", "def mean(n):\n    return 1\n").replace("src/stats.py>>>", "src/stats.py")
 
     assert parse_reply(reply) == [("src/stats.py", "def mean(n):\n    return 1\n")]
+
+
+def test_the_initially_failing_tests_are_recorded(task_dir: Path, tmp_path: Path) -> None:
+    result, _ = run(task_dir, tmp_path, ScriptedProvider([text_reply(block("src/stats.py", FIXED))]))
+
+    assert result.initial_failing_tests == ["tests/test_stats.py::test_mean"]

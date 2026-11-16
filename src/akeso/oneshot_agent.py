@@ -18,7 +18,7 @@ from pathlib import Path
 from akeso.agent import (
     TRACE_OUTPUT_LIMIT, AgentResult, EnvironmentFactory, StopReason, _explain, _first_message,
 )
-from akeso.checks import CheckResult, trim_output
+from akeso.checks import CheckResult, failing_tests, trim_output
 from akeso.config import AgentLimits, Settings, load_settings
 from akeso.environment import Environment
 from akeso.grading import GradeResult, Verdict, collect_changes, grade
@@ -69,6 +69,7 @@ def run_oneshot_agent(
     check: Check = sql_check or (lambda e, **kwargs: e.run_checks(**kwargs))
     steps = input_tokens = output_tokens = rate_limit_retries = pacing_waits = cached_input_tokens = 0
     pacing_wait_seconds = cost = 0.0
+    initial_failing: list[str] | None = None
 
     with TraceWriter(path) as trace:
 
@@ -87,6 +88,7 @@ def run_oneshot_agent(
                 tampering=[str(finding) for finding in graded.tampering] if graded else [],
                 warnings=list(graded.warnings) if graded else [],
                 detail=detail, run_id=run_id, trace_path=path.as_posix(), repeat=repeat,
+                initial_failing_tests=initial_failing,
             )
             trace.event("result", **asdict(outcome))
             return outcome
@@ -110,6 +112,7 @@ def run_oneshot_agent(
                 sql_check.prepare(env)
             initial = check(env)
             record_check("initial", initial)
+            initial_failing = [] if sql_check else failing_tests(initial.output)
             if initial.passed:
                 return result(StopReason.ERROR, "Checks already pass before any change; task is invalid.")
 

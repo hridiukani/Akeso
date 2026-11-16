@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 
-from akeso.checks import CheckResult, normalize_check_output, trim_output
+from akeso.checks import CheckResult, failing_tests, normalize_check_output, trim_output
 from akeso.config import AgentLimits, Settings, load_settings
 from akeso.environment import Environment
 from akeso.grading import GradeResult, Verdict, collect_changes, grade
@@ -81,6 +81,9 @@ class AgentResult:
     run_id: str = ""
     trace_path: str = ""  # the JSON Lines trace of this run
     repeat: int = 1  # which attempt at this task within the run (1, 2, ...)
+    # Every visible test failing before any change (code tasks; [] for SQL), in full rather
+    # than cut short like the trace. None in results from before it was recorded.
+    initial_failing_tests: list[str] | None = None
 
 
 class RepeatedFailureDetector:
@@ -139,6 +142,7 @@ def run_agent(
     pacing_wait_seconds = 0.0
     cost = 0.0
     stop, detail = StopReason.ERROR, ""
+    initial_failing: list[str] | None = None
 
     with TraceWriter(path) as trace:
 
@@ -157,6 +161,7 @@ def run_agent(
                 tampering=[str(finding) for finding in graded.tampering] if graded else [],
                 warnings=list(graded.warnings) if graded else [],
                 detail=detail, run_id=run_id, trace_path=path.as_posix(), repeat=repeat,
+                initial_failing_tests=initial_failing,
             )
             trace.event("result", **asdict(outcome))
             return outcome
@@ -180,6 +185,7 @@ def run_agent(
                 sql_check.prepare(env)  # before the model's first turn
             initial = check(env)
             record_check("initial", initial)
+            initial_failing = [] if sql_check else failing_tests(initial.output)
             if initial.passed:
                 # Nothing to repair, so don't spend money asking the model.
                 return result(StopReason.ERROR, "Checks already pass before any change; task is invalid.")

@@ -295,3 +295,16 @@ def test_exhausted_quota_abandons_the_attempt_without_grading(task_dir: Path, tm
     assert len(factory.created) == 1  # only the agent's environment: nothing was graded
     events = [line for line in (tmp_path / "runs" / "r").glob("*.jsonl")][0].read_text(encoding="utf-8")
     assert "QuotaExhaustedError" in events
+
+
+def test_the_initially_failing_tests_are_recorded_in_full(task_dir: Path, tmp_path: Path) -> None:
+    many = [f"tests/test_stats.py::test_case_{i:03}" for i in range(200)]  # far past the trace's 3,000 characters
+
+    def judge_many(files: dict[str, str]) -> tuple[bool, str]:
+        if "- 1" not in files["src/stats.py"]:
+            return True, "200 passed"
+        return False, "\n".join(f"FAILED {name} - assert False" for name in many) + "\n200 failed"
+
+    result, _, _ = run(task_dir, tmp_path, [tool_reply(FIX), tool_reply(CHECKS)], factory=FakeFactory(checks=judge_many))
+
+    assert result.initial_failing_tests == many
