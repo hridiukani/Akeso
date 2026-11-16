@@ -41,7 +41,9 @@ from akeso.freeze import (
     DEFAULT_MANIFEST, FreezeCheck, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest,
 )
 from akeso.grading import Verdict
-from akeso.official import OFFICIAL_REPEATS, estimate, official_problems
+from akeso.llm.groq_provider import GroqProvider
+from akeso.llm.pacing import RateLimitHeaders
+from akeso.official import OFFICIAL_REPEATS, estimate, official_problems, tier_problems
 from akeso.report import REPORT_FILE, write_report
 from akeso.sandbox import LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers, image_digest
 from akeso.suites import SuiteError, load_suite
@@ -219,6 +221,12 @@ def _check_before_running(
         except FreezeError:
             check = None
         problems = official_problems(settings, limits, check, fingerprint, allow_modified=allow_modified, overrides=overrides)
+        if not problems:  # only spend a request once everything else is right
+            try:
+                problems = tier_problems(probe_rate_limits(settings))
+            except Exception as error:  # e.g. a bad key or no network: can't confirm, so refuse
+                problems = [f"couldn't ask Groq for this key's rate limits ({type(error).__name__}: {error}), "
+                            "so the Developer tier can't be confirmed"]
         if problems:
             console.print("[red]Error:[/red] this can't be an official run:", highlight=False)
             for problem in problems:
@@ -248,6 +256,12 @@ def _check_before_running(
     if not check.ok:
         console.print(f"[yellow]Warning:[/yellow] running with {len(check.modified)} task file(s) changed since the freeze.")
     return check
+
+
+def probe_rate_limits(settings: Settings) -> RateLimitHeaders | None:
+    """The rate limits Groq reports for the active key, from one tiny request."""
+    assert settings.groq_api_key is not None
+    return GroqProvider(settings.groq_api_key, settings.model).rate_limits()
 
 
 def _progress(repeats: int) -> Callable[[AgentResult], None]:

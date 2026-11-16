@@ -70,3 +70,15 @@ def test_estimate_only_uses_runs_in_the_same_mode(tmp_path: Path) -> None:
     assert estimate(["c001"], "openai/gpt-oss-120b", tmp_path).input_tokens == 5000
     assert estimate(["c001"], "openai/gpt-oss-120b", tmp_path, mode="oneshot").input_tokens == 1000
     assert estimate(["c002"], "openai/gpt-oss-120b", tmp_path, mode="oneshot").input_tokens == 1500
+
+
+def test_tier_check_refuses_the_free_tier_limits_and_missing_headers() -> None:
+    from akeso.llm.pacing import RateLimitHeaders
+    from akeso.official import tier_problems
+
+    free = RateLimitHeaders(limit_requests=1000, limit_tokens=8000)
+    assert "free tier's limits for this key (1,000 requests per day, 8,000 tokens per minute)" in tier_problems(free)[0]
+    assert "no rate-limit headers" in tier_problems(None)[0]
+    assert "no rate-limit headers" in tier_problems(RateLimitHeaders(limit_tokens=250_000))[0]
+    assert tier_problems(RateLimitHeaders(limit_requests=500_000, limit_tokens=250_000)) == []
+    assert tier_problems(RateLimitHeaders(limit_requests=1000, limit_tokens=250_000)) == []  # higher in one

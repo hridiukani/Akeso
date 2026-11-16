@@ -275,3 +275,29 @@ def test_server_wait_is_read_from_the_message(message: str, seconds: float | Non
     from akeso.llm.groq_provider import _server_wait
 
     assert _server_wait(daily_limit(message)) == seconds
+
+
+FREE_HEADERS = {"x-ratelimit-limit-requests": "1000", "x-ratelimit-limit-tokens": "8000"}
+
+
+def test_rate_limits_sends_one_tiny_request_and_reads_the_headers() -> None:
+    sent = []
+    provider = GroqProvider(api_key="fake", model="openai/gpt-oss-120b")
+    provider._send = lambda request: sent.append(request) or (OK, FREE_HEADERS)
+
+    limits = provider.rate_limits()
+
+    assert (limits.limit_requests, limits.limit_tokens) == (1000, 8000)
+    assert len(sent) == 1 and sent[0]["max_completion_tokens"] <= 64 and "tools" not in sent[0]
+
+
+def test_rate_limits_reads_the_headers_of_a_429_too() -> None:
+    provider = GroqProvider(api_key="fake", model="openai/gpt-oss-120b")
+    limited = httpx.Response(429, headers=FREE_HEADERS, request=httpx.Request("POST", "https://api.groq.com"))
+
+    def send(request):
+        raise openai.RateLimitError("rate limited", response=limited, body=None)
+
+    provider._send = send
+
+    assert provider.rate_limits().limit_tokens == 8000

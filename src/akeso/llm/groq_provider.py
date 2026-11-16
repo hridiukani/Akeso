@@ -158,6 +158,21 @@ class GroqProvider:
                     rejected, self.max_tool_call_attempts,
                 )
 
+    def rate_limits(self) -> RateLimitHeaders | None:
+        """The account's rate limits, from the headers of one tiny request (a few dozen
+        tokens). A 429 still carries the headers, so it counts as an answer too."""
+        request = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": "Reply with OK."}],
+            "reasoning_effort": "low",
+            "max_completion_tokens": 32,
+        }
+        try:
+            _, headers = self._send(request)
+        except openai.RateLimitError as error:
+            headers = error.response.headers
+        return RateLimitHeaders.parse(headers)
+
     def _send(self, request: dict[str, Any]) -> tuple[Any, Mapping[str, str]]:
         """One API call, returning the parsed reply and the HTTP response headers."""
         raw = self._client.chat.completions.with_raw_response.create(**request)

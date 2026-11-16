@@ -13,6 +13,7 @@ from akeso.batch import RunSummary, summarize
 from akeso.freeze import FreezeCheck, read_manifest
 from akeso.config import Settings
 from akeso.grading import Verdict
+from akeso.llm.pacing import RateLimitHeaders
 from akeso.suites import SuiteError, load_suite
 from akeso.trace import TraceWriter, trace_path
 from akeso.validate import TaskValidation
@@ -59,6 +60,7 @@ def fake_run(monkeypatch: pytest.MonkeyPatch):
         mode=mode))
     monkeypatch.setattr(cli, "check_tasks", lambda tasks, manifest: calls.get("freeze_check", FreezeCheck("fp-123")))
     monkeypatch.setattr(cli, "load_suite", fixed_suite)
+    monkeypatch.setattr(cli, "probe_rate_limits", lambda settings: calls.get("rate_limits", DEVELOPER_LIMITS))
     return calls
 
 
@@ -211,6 +213,7 @@ def test_run_without_a_manifest_is_a_clear_error(monkeypatch: pytest.MonkeyPatch
 
 
 DEVELOPER = replace(SETTINGS, groq_tier="developer")
+DEVELOPER_LIMITS = RateLimitHeaders(limit_requests=500_000, limit_tokens=250_000)
 
 
 def test_official_run_refuses_the_free_tier_and_says_why(fake_run) -> None:
@@ -496,3 +499,35 @@ def test_the_smoke_suite_is_dev_only() -> None:
     from akeso.tasks import find_task
 
     assert {find_task(task_id).spec.split for task_id in load_suite("smoke")} == {"dev"}
+
+
+def test_official_run_refuses_a_key_on_the_free_tier_whatever_groq_tier_says(fake_run, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "load_settings", lambda: DEVELOPER)  # .env claims the Developer tier
+    fake_run["rate_limits"] = RateLimitHeaders(limit_requests=1000, limit_tokens=8000)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official", "--yes"])
+
+    assert out.exit_code == 1 and "Groq reports the free tier's limits for this key" in out.output
+    assert "task_ids" not in fake_run
+
+
+def test_official_run_refuses_when_the_tier_probe_fails(fake_run, monkeypatch) -> None:
+    monkeypatch.setattr(cli, "load_settings", lambda: DEVELOPER)
+
+    def broken(settings):
+        raise ConnectionError("no network")
+
+    monkeypatch.setattr(cli, "probe_rate_limits", broken)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official", "--yes"])
+
+    assert out.exit_code == 1 and "couldn't ask Groq for this key's rate limits" in out.output
+
+
+def test_tier_probe_is_skipped_when_the_setup_is_already_wrong(fake_run, monkeypatch) -> None:
+    probed = []
+    monkeypatch.setattr(cli, "probe_rate_limits", lambda settings: probed.append(1))
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official"])  # free tier in .env
+
+    assert out.exit_code == 1 and probed == []

@@ -17,6 +17,7 @@ from typing import Any
 
 from akeso.config import PRICES, AgentLimits, ModelSettings, Settings
 from akeso.freeze import FreezeCheck
+from akeso.llm.pacing import RateLimitHeaders
 
 # The measurement setup. Defaults for model settings and limits are part of it, so an
 # official run can't be quietly shortened or re-tuned through .env.
@@ -25,6 +26,12 @@ MEASUREMENT_TIER = "developer"
 MEASUREMENT_MODEL = "openai/gpt-oss-120b"
 MEASUREMENT_MODEL_SETTINGS = ModelSettings()
 MEASUREMENT_LIMITS = AgentLimits()
+# The limits Groq reports for openai/gpt-oss-120b on the free tier (seen on our key in
+# every free-tier response): x-ratelimit-limit-requests is per day, -tokens per minute.
+# Groq's docs don't let us tell the Developer tier's numbers for certain, so the tier
+# check refuses anything that isn't above these: it fails closed.
+FREE_TIER_REQUESTS_PER_DAY = 1_000
+FREE_TIER_TOKENS_PER_MINUTE = 8_000
 # Attempts per task in an official run, unless --repeats says otherwise: enough to see the
 # spread between runs, at three times the cost of one.
 OFFICIAL_REPEATS = 3
@@ -76,6 +83,18 @@ def official_problems(
     if fingerprint.get("docker_image") is None:
         problems.append("the Docker sandbox image isn't available")
     return problems
+
+
+def tier_problems(limits: RateLimitHeaders | None) -> list[str]:
+    """Why Groq's reported rate limits don't show the Developer tier (empty if they do).
+    GROQ_TIER is only what .env claims; the headers are what the key actually gets."""
+    if limits is None or limits.limit_requests is None or limits.limit_tokens is None:
+        return ["Groq sent no rate-limit headers, so the Developer tier can't be confirmed"]
+    if limits.limit_requests <= FREE_TIER_REQUESTS_PER_DAY and limits.limit_tokens <= FREE_TIER_TOKENS_PER_MINUTE:
+        return [f"Groq reports the free tier's limits for this key ({limits.limit_requests:,} requests per day, "
+                f"{limits.limit_tokens:,} tokens per minute), whatever GROQ_TIER says; official runs need the "
+                "Developer tier"]
+    return []
 
 
 def _changed(actual: dict[str, Any], expected: dict[str, Any]) -> str:
