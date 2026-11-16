@@ -117,3 +117,10 @@ def test_parse_reply_reads_every_block_and_strips_fences() -> None:
 def test_parse_reply_refuses_unsafe_paths(path: str) -> None:
     with pytest.raises(ReplyError, match="unsafe path"):
         parse_reply(block(path, "x = 1\n"))
+
+
+def test_parse_reply_accepts_a_header_without_its_closing_marker() -> None:
+    # Seen from gpt-oss-120b in the rehearsal: "<<<FILE: src/stats.py" with no ">>>".
+    reply = block("src/stats.py", "def mean(n):\n    return 1\n").replace("src/stats.py>>>", "src/stats.py")
+
+    assert parse_reply(reply) == [("src/stats.py", "def mean(n):\n    return 1\n")]

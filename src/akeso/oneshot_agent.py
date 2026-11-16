@@ -33,8 +33,10 @@ from akeso.tasks import Task, load_task
 from akeso.tools import Check
 from akeso.trace import DEFAULT_TRACE_DIR, TraceWriter, new_run_id, trace_path
 
+# The header's closing ">>>" is optional: gpt-oss sometimes leaves it off ("<<<FILE: src/a.py").
 _FILE_BLOCK = re.compile(
-    r"^" + re.escape(FILE_START) + r"(?P<path>[^\n>]+)>>>\n(?P<content>.*?)\n?" + re.escape(FILE_END) + r"[ \t]*$",
+    r"^" + re.escape(FILE_START) + r"(?P<path>[^\n>]+?)[ \t]*(?:>>>)?[ \t]*\n(?P<content>.*?)\n?"
+    + re.escape(FILE_END) + r"[ \t]*$",
     re.MULTILINE | re.DOTALL,
 )
 
