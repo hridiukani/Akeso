@@ -289,10 +289,28 @@ def _print_summary(summary: RunSummary, cost_basis: str, run_type: str) -> None:
             console.print(f"  {name}: {_rates(g)} | average steps {g['average_steps']:.1f}"
                           f" | average tokens {g['average_tokens']:,.0f} | total cost ${g['total_cost_usd']:.4f}",
                           soft_wrap=True)
+    _print_categories(t)
     if summary.stopped:
         console.print(f"[yellow]Stopped early[/yellow] ({summary.stopped}). {len(summary.not_run)} attempt(s) not run; "
                       f"finish them later with: akeso run --resume {summary.run_id}", highlight=False, soft_wrap=True)
     console.print(f"Run folder: {summary.run_dir}")
+
+
+def _print_categories(totals: dict[str, Any]) -> None:
+    """Why the failed attempts failed: one row per category, overall and per split."""
+    overall = totals.get("failure_categories") or {}
+    if not overall:
+        return
+    splits = {name: g.get("failure_categories", {}) for name, g in totals.get("by_split", {}).items()}
+    console.print("Failure categories (failed attempts):")
+    table = Table()
+    table.add_column("Category")
+    table.add_column("All", justify="right")
+    for name in splits:
+        table.add_column(name, justify="right")
+    for category, count in overall.items():
+        table.add_row(category, str(count), *(str(counts.get(category, 0)) for counts in splits.values()))
+    console.print(table)
 
 
 def _rates(g: dict[str, Any]) -> str:

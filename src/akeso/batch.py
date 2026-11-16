@@ -20,6 +20,7 @@ from typing import Any
 
 from akeso.agent import AgentResult, EnvironmentFactory, StopReason, run_agent
 from akeso.config import AgentLimits, Settings, load_settings
+from akeso.failures import categorize, category_counts, label_key, read_labels
 from akeso.grading import Verdict
 from akeso.llm.provider import Provider, get_provider
 from akeso.llm.types import QuotaExhaustedError
@@ -29,7 +30,7 @@ from akeso import fingerprint as run_fingerprint
 from akeso.sandbox import DockerSandbox, cleanup_leftover_containers, image_digest
 from akeso.tasks import DEFAULT_TASKS_ROOT, find_task
 from akeso.stats import mean_and_std, pass_at, solve_counts
-from akeso.trace import DEFAULT_TRACE_DIR, new_run_id, trace_path
+from akeso.trace import DEFAULT_TRACE_DIR, new_run_id, read_trace, trace_path
 
 SUMMARY_FILE = "summary.json"
 
@@ -209,7 +210,9 @@ def _run_attempts(
     runner = run_oneshot_agent if header["mode"] == "oneshot" else run_agent
     not_run: list[Attempt] = []
     stopped = None
-    _write_summary(run_dir, header, settings, limits, results, splits, list(todo), None)
+    labels = read_labels(run_dir)
+    categories = {(r.task_id, r.repeat): _category(r, labels) for r in results}
+    _write_summary(run_dir, header, settings, limits, results, splits, list(todo), None, categories)
     for index, (task_id, repeat) in enumerate(todo):
         try:
             result = runner(
@@ -223,12 +226,28 @@ def _run_attempts(
             result = _error_result(task_id, settings, run_id, f"{type(problem).__name__}: {problem}", repeat,
                                    prompt_version(header["mode"]))
         results.append(result)
+        categories[(result.task_id, result.repeat)] = _category(result, labels)
         if on_result:
             on_result(result)
-        _write_summary(run_dir, header, settings, limits, results, splits, list(todo[index + 1:]), None)
-    _write_summary(run_dir, header, settings, limits, results, splits, not_run, stopped)
-    return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=summarize(results, splits),
+        _write_summary(run_dir, header, settings, limits, results, splits, list(todo[index + 1:]), None, categories)
+    totals = _write_summary(run_dir, header, settings, limits, results, splits, not_run, stopped, categories)
+    return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=totals,
                       not_run=not_run, stopped=stopped)
+
+
+def _category(result: AgentResult, labels: Mapping[str, str]) -> str | None:
+    """The attempt's failure category: a label from labels.yaml, else the automatic one
+    (worked out once, from its trace)."""
+    key = label_key(result.task_id, result.repeat)
+    if key in labels:
+        return labels[key]
+    path = Path(result.trace_path)
+    try:
+        events = read_trace(path) if result.trace_path and path.is_file() else []
+    except (OSError, ValueError):
+        events = []
+    return categorize({**asdict(result), "verdict": result.verdict.value, "stop_reason": result.stop_reason.value},
+                      events)
 
 
 def summarize(results: Sequence[AgentResult], splits: Mapping[str, str] | None = None) -> dict[str, Any]:
@@ -293,9 +312,16 @@ def read_summary(run_dir: str | Path) -> dict[str, Any]:
 def _write_summary(
     run_dir: Path, header: dict[str, Any], settings: Settings, limits: AgentLimits, results: list[AgentResult],
     splits: Mapping[str, str], not_run: list[Attempt], stopped: str | None,
-) -> None:
-    """While a run is going, not_run lists what's still to do, so a run that dies outright
-    (killed, power cut) can be resumed too."""
+    categories: Mapping[Attempt, str | None],
+) -> dict[str, Any]:
+    """Write summary.json and return its totals. While a run is going, not_run lists what's
+    still to do, so a run that dies outright (killed, power cut) can be resumed too."""
+    totals = summarize(results, splits)
+    category = {id(r): categories.get((r.task_id, r.repeat)) for r in results}
+    totals["failure_categories"] = category_counts(category[id(r)] for r in results)
+    for split, group in totals.get("by_split", {}).items():
+        group["failure_categories"] = category_counts(
+            category[id(r)] for r in results if splits.get(r.task_id) == split)
     summary = {
         **{name: header[name] for name in ("run_id", "run_type", "repeats", "mode", "task_ids", "started", "resumed")},
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -309,13 +335,14 @@ def _write_summary(
         "complete": not not_run,
         "stopped": stopped,
         "not_run": [{"task_id": task_id, "repeat": repeat} for task_id, repeat in not_run],
-        "totals": summarize(results, splits),
-        "results": [{**asdict(r), "split": splits.get(r.task_id)} for r in results],
+        "totals": totals,
+        "results": [{**asdict(r), "split": splits.get(r.task_id), "category": category[id(r)]} for r in results],
     }
     # Write then rename, so a crash mid-write never leaves a half-written summary.
     temporary = run_dir / f"{SUMMARY_FILE}.tmp"
     temporary.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
     temporary.replace(run_dir / SUMMARY_FILE)
+    return totals
 
 
 def _error_result(

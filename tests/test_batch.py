@@ -333,3 +333,21 @@ def test_resume_keeps_the_runs_mode(tasks_root: Path, tmp_path: Path) -> None:
 def test_an_unknown_mode_is_refused(tasks_root: Path, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="mode must be one of"):
         run(tasks_root, tmp_path, [], mode="twoshot")
+
+
+def test_failed_attempts_get_a_category_in_the_summary(tasks_root: Path, tmp_path: Path) -> None:
+    summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {})), text_reply("I give up.")])
+
+    data = read_summary(summary.run_dir)
+    assert [r["category"] for r in data["results"]] == [None, "gave_up"]
+    assert data["totals"]["failure_categories"] == {"gave_up": 1}
+    assert summary.totals["failure_categories"] == {"gave_up": 1}
+
+
+def test_labels_file_overrides_categories_while_running(tasks_root: Path, tmp_path: Path) -> None:
+    (tmp_path / "runs" / "run-1").mkdir(parents=True)
+    (tmp_path / "runs" / "run-1" / "labels.yaml").write_text("t002_hopeless: wrong_result\n", encoding="utf-8")
+
+    summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {})), text_reply("I give up.")])
+
+    assert read_summary(summary.run_dir)["results"][1]["category"] == "wrong_result"

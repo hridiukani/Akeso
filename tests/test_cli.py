@@ -436,3 +436,18 @@ def test_compare_refuses_different_suites(tmp_path: Path) -> None:
     out = runner.invoke(cli.app, ["compare", "a", "b", "--runs-dir", str(tmp_path)])
 
     assert out.exit_code == 1 and "different suites" in out.output
+
+
+def test_run_prints_the_failure_categories(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run_tasks(task_ids, **kwargs):
+        results = [result("c001_mean", Verdict.FAILED, 20, 1000, StopReason.MAX_STEPS)]
+        totals = summarize(results, {"c001_mean": "dev"})
+        totals["failure_categories"] = {"max_steps": 1}
+        totals["by_split"]["dev"]["failure_categories"] = {"max_steps": 1}
+        return RunSummary(run_id="run-c", run_dir=Path("runs/run-c"), results=results, totals=totals)
+
+    monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 0 and "Failure categories (failed attempts):" in out.output and "max_steps" in out.output
