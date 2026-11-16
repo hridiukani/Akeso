@@ -3,6 +3,7 @@
     runs/<run_id>/
         <task_id>.jsonl   one trace per task (<task_id>.r2.jsonl for repeat 2, ...)
         summary.json      every attempt's result plus the totals (rewritten after each one)
+        report.html       a self-contained page of the results and traces (at the end)
 
 Tasks run one at a time, sharing one (paced) provider. If the provider's quota runs out,
 the run stops cleanly and lists the attempts it didn't get to as "not_run";
@@ -12,6 +13,7 @@ resume_tasks finishes those later, along with any that crashed.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
@@ -26,6 +28,7 @@ from akeso.llm.provider import Provider, get_provider
 from akeso.llm.types import QuotaExhaustedError
 from akeso.oneshot_agent import run_oneshot_agent
 from akeso.prompts import AGENT_PROMPT_VERSION, prompt_version
+from akeso.report import write_report
 from akeso import fingerprint as run_fingerprint
 from akeso.sandbox import DockerSandbox, cleanup_leftover_containers, image_digest
 from akeso.tasks import DEFAULT_TASKS_ROOT, find_task
@@ -33,6 +36,8 @@ from akeso.stats import mean_and_std, pass_at, solve_counts
 from akeso.trace import DEFAULT_TRACE_DIR, new_run_id, read_trace, trace_path
 
 SUMMARY_FILE = "summary.json"
+
+logger = logging.getLogger(__name__)
 
 MODES = ("loop", "oneshot")  # the agent loop, or a single model call (oneshot_agent.py)
 
@@ -231,6 +236,10 @@ def _run_attempts(
             on_result(result)
         _write_summary(run_dir, header, settings, limits, results, splits, list(todo[index + 1:]), None, categories)
     totals = _write_summary(run_dir, header, settings, limits, results, splits, not_run, stopped, categories)
+    try:
+        write_report(run_dir)
+    except Exception as problem:  # the results are safe in summary.json; `akeso report` can retry
+        logger.warning("Couldn't write the report for run %s: %s", run_id, problem)
     return RunSummary(run_id=run_id, run_dir=run_dir, results=results, totals=totals,
                       not_run=not_run, stopped=stopped)
 

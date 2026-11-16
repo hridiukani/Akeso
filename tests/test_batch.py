@@ -42,7 +42,8 @@ def test_runs_every_task_into_one_folder(tasks_root: Path, tmp_path: Path) -> No
     summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {})), text_reply("I give up.")])
 
     assert summary.run_dir == tmp_path / "runs" / "run-1"
-    assert sorted(p.name for p in summary.run_dir.iterdir()) == ["summary.json", "t001_fixable.jsonl", "t002_hopeless.jsonl"]
+    assert sorted(p.name for p in summary.run_dir.iterdir()) == [
+        "report.html", "summary.json", "t001_fixable.jsonl", "t002_hopeless.jsonl"]
     assert [(r.task_id, r.verdict) for r in summary.results] == [("t001_fixable", Verdict.PASSED), ("t002_hopeless", Verdict.FAILED)]
     assert all(r.run_id == "run-1" for r in summary.results)
 

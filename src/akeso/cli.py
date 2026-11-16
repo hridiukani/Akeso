@@ -5,6 +5,7 @@
     akeso run --suite smoke --mode oneshot
     akeso run --resume RUN_ID [--yes]
     akeso compare RUN_A RUN_B
+    akeso report RUN_ID
     akeso trace RUN_ID TASK_ID [--repeat N]
     akeso validate [--suite smoke]
     akeso freeze
@@ -29,16 +30,18 @@ from rich.table import Table
 from akeso import fingerprint as run_fingerprint
 from akeso.agent import AgentResult
 from akeso.batch import (
-    MODES, ResumeError, RunSummary, load_for_resume, planned_attempts, resume_differences, resume_tasks, run_tasks,
+    MODES, SUMMARY_FILE, ResumeError, RunSummary, load_for_resume, planned_attempts, resume_differences, resume_tasks, run_tasks,
     saved_mode, split_attempts,
 )
 from akeso.compare import CompareError, compare_runs
 from akeso.config import PRICES, ConfigError, Settings, load_settings
+from akeso.failures import LabelsError
 from akeso.freeze import (
     DEFAULT_MANIFEST, FreezeCheck, FreezeError, build_manifest, check_tasks, read_manifest, write_manifest,
 )
 from akeso.grading import Verdict
 from akeso.official import OFFICIAL_REPEATS, estimate, official_problems
+from akeso.report import REPORT_FILE, write_report
 from akeso.sandbox import LEFTOVER_MAX_AGE, SandboxError, cleanup_leftover_containers, image_digest
 from akeso.suites import SuiteError, load_suite
 from akeso.tasks import TaskError, all_tasks, find_task
@@ -294,6 +297,8 @@ def _print_summary(summary: RunSummary, cost_basis: str, run_type: str) -> None:
         console.print(f"[yellow]Stopped early[/yellow] ({summary.stopped}). {len(summary.not_run)} attempt(s) not run; "
                       f"finish them later with: akeso run --resume {summary.run_id}", highlight=False, soft_wrap=True)
     console.print(f"Run folder: {summary.run_dir}")
+    if (summary.run_dir / REPORT_FILE).is_file():
+        console.print(f"Report: {summary.run_dir / REPORT_FILE}")
 
 
 def _print_categories(totals: dict[str, Any]) -> None:
@@ -407,6 +412,23 @@ def _spread(totals: dict[str, Any]) -> str:
 def _change(a: float, b: float, fmt: str) -> str:
     """"A -> B" for a per-attempt average."""
     return f"{fmt.format(a)} -> {fmt.format(b)}"
+
+
+@app.command()
+@_friendly_errors
+def report(
+    run_id: str = typer.Argument(..., help="The run to report on."),
+    runs_dir: Path = typer.Option(DEFAULT_TRACE_DIR, "--runs-dir", help="Where run folders live."),
+) -> None:
+    """(Re)build a run's report.html, applying its labels.yaml."""
+    run_dir = runs_dir / run_id
+    if not (run_dir / SUMMARY_FILE).is_file():
+        _fail(f"no run {run_id!r} in {runs_dir} (no {SUMMARY_FILE}).")
+    try:
+        path = write_report(run_dir)
+    except LabelsError as problem:
+        _fail(str(problem))
+    console.print(f"Report: {path}")
 
 
 @app.command()
