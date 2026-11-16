@@ -352,3 +352,43 @@ def test_labels_file_overrides_categories_while_running(tasks_root: Path, tmp_pa
     summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {})), text_reply("I give up.")])
 
     assert read_summary(summary.run_dir)["results"][1]["category"] == "wrong_result"
+
+
+def crash_t002(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_run_agent = batch.run_agent
+
+    def flaky(task_dir, **kwargs):
+        if Path(task_dir).name == "t002_hopeless":
+            raise RuntimeError("Docker went away")
+        return real_run_agent(task_dir, **kwargs)
+
+    monkeypatch.setattr(batch, "run_agent", flaky)
+
+
+def test_crashed_attempts_are_counted_but_not_scored(tasks_root: Path, tmp_path: Path, monkeypatch) -> None:
+    crash_t002(monkeypatch)
+    summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {}))])
+
+    t = summary.totals
+    assert (t["attempts"], t["scored_attempts"], t["crashed"], t["passed"], t["failed"]) == (2, 1, 1, 1, 0)
+    assert t["pass_rate"] == 1.0 and t["pass_at_1"] == 1.0 and t["solve_rates"] == {"t001_fixable": "1/1"}
+    assert summary.crashed == [("t002_hopeless", 1)]
+    saved = read_summary(summary.run_dir)
+    assert saved["crashed"] == [{"task_id": "t002_hopeless", "repeat": 1}]
+    assert saved["totals"]["failure_categories"] == {"crashed": 1}  # still categorised
+    assert saved["complete"] is True  # a dev run: crashes are reported, not blocking
+
+
+def test_an_official_run_with_crashes_is_incomplete(tasks_root: Path, tmp_path: Path, monkeypatch) -> None:
+    crash_t002(monkeypatch)
+    summary = run(tasks_root, tmp_path, [tool_reply(FIX), tool_reply(("run_checks", {}))], run_type="official")
+
+    assert read_summary(summary.run_dir)["complete"] is False
+
+
+def test_a_repeat_where_everything_crashed_has_no_pass_rate(tasks_root: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(batch, "run_agent", lambda task_dir, **kw: (_ for _ in ()).throw(RuntimeError("down")))
+    summary = run(tasks_root, tmp_path, [])
+
+    t = summary.totals
+    assert (t["scored_attempts"], t["crashed"], t["pass_rate"], t["pass_rates_by_repeat"]) == (0, 2, 0.0, [])

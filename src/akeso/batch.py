@@ -60,6 +60,11 @@ class RunSummary:
     not_run: list[Attempt] = field(default_factory=list)  # attempts left for --resume
     stopped: str | None = None  # why the run stopped early, if it did
 
+    @property
+    def crashed(self) -> list[Attempt]:
+        """Attempts that crashed: not scored, and rerun by --resume."""
+        return [(r.task_id, r.repeat) for r in self.results if is_crashed(r)]
+
 
 def run_tasks(
     task_ids: Sequence[str],
@@ -193,6 +198,12 @@ def split_attempts(saved: dict[str, Any]) -> tuple[list[AgentResult], list[Attem
     return kept, [attempt for attempt in planned_attempts(saved) if attempt not in done]
 
 
+def is_crashed(result: AgentResult) -> bool:
+    """The harness or provider failed (stop reason "error"), so the attempt says nothing
+    about the model: it's left out of the pass rate and rerun by --resume."""
+    return result.stop_reason is StopReason.ERROR
+
+
 def result_from_dict(data: dict[str, Any]) -> AgentResult:
     """An AgentResult back from its summary.json form."""
     known = {f.name for f in fields(AgentResult)}
@@ -274,25 +285,30 @@ def summarize(results: Sequence[AgentResult], splits: Mapping[str, str] | None =
 
 def _totals(results: Sequence[AgentResult]) -> dict[str, Any]:
     """Counts are per attempt; with several repeats, solve rates, the pass rate's spread
-    across repeats, pass@1 and pass@k describe the tasks (see stats.py)."""
+    across repeats, pass@1 and pass@k describe the tasks (see stats.py). Crashed attempts
+    are counted but not scored: every rate is over the other ("scored") attempts. Steps,
+    tokens and cost include them, since they were really spent."""
     count = len(results)
+    scored = [r for r in results if not is_crashed(r)]
     # r.passed, not the verdict: a run stopped by the provider's token limit is a failure.
-    passed = sum(r.passed for r in results)
-    counts = solve_counts((r.task_id, r.passed) for r in results)
+    passed = sum(r.passed for r in scored)
+    counts = solve_counts((r.task_id, r.passed) for r in scored)
     repeats = max((n for _, n in counts.values()), default=0)
     per_repeat = []
-    for repeat in sorted({r.repeat for r in results}):
-        attempts = [r for r in results if r.repeat == repeat]
+    for repeat in sorted({r.repeat for r in scored}):
+        attempts = [r for r in scored if r.repeat == repeat]
         per_repeat.append(sum(r.passed for r in attempts) / len(attempts))
     rate_mean, rate_std = mean_and_std(per_repeat)
     return {
         "tasks": len(counts),
         "attempts": count,
+        "scored_attempts": len(scored),
+        "crashed": count - len(scored),
         "repeats": repeats,
         "passed": passed,
-        "failed": sum(not r.passed and r.verdict is not Verdict.TAMPERED for r in results),
-        "tampered": sum(r.verdict is Verdict.TAMPERED for r in results),
-        "pass_rate": passed / count if count else 0.0,
+        "failed": sum(not r.passed and r.verdict is not Verdict.TAMPERED for r in scored),
+        "tampered": sum(r.verdict is Verdict.TAMPERED for r in scored),
+        "pass_rate": passed / len(scored) if scored else 0.0,
         "pass_rate_mean": rate_mean,  # mean over repeats of each repeat's pass rate
         "pass_rate_std": rate_std,  # their sample standard deviation (0 with one repeat)
         "pass_rates_by_repeat": per_repeat,
@@ -341,9 +357,11 @@ def _write_summary(
         "fingerprint": header["fingerprint"],
         "cost_basis": settings.cost_basis,
         "limits": asdict(limits),
-        "complete": not not_run,
+        # An official run also needs every attempt scored: crashed ones are rerun by --resume.
+        "complete": not not_run and not (header["run_type"] == "official" and totals["crashed"]),
         "stopped": stopped,
         "not_run": [{"task_id": task_id, "repeat": repeat} for task_id, repeat in not_run],
+        "crashed": [{"task_id": r.task_id, "repeat": r.repeat} for r in results if is_crashed(r)],
         "totals": totals,
         "results": [{**asdict(r), "split": splits.get(r.task_id), "category": category[id(r)]} for r in results],
     }

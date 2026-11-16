@@ -54,8 +54,13 @@ def build_report(run_dir: str | Path) -> str:
 
 def _overview(summary: dict[str, Any]) -> str:
     t = summary.get("totals", {})
-    status = "complete" if summary.get("complete", True) else (
-        f"incomplete: {len(summary.get('not_run', []))} attempt(s) not run ({summary.get('stopped') or 'interrupted'})")
+    if summary.get("complete", True):
+        status = "complete"
+    elif summary.get("not_run"):
+        status = (f"incomplete: {len(summary['not_run'])} attempt(s) not run "
+                  f"({summary.get('stopped') or 'interrupted'})")
+    else:
+        status = f"incomplete: {len(summary.get('crashed') or [])} attempt(s) crashed and must be rerun"
     if summary.get("run_type") == "official":
         label = "Official run: the measurement setup, the frozen suite unmodified, a clean working tree."
     else:
@@ -66,6 +71,7 @@ def _overview(summary: dict[str, Any]) -> str:
         ("Mode", summary.get("mode") or "loop"),
         ("Prompt version", summary.get("prompt_version")),
         ("Tasks x repeats", f"{t.get('tasks', 0)} x {summary.get('repeats', 1)} ({t.get('attempts', 0)} attempts)"),
+        ("Crashed", f"{t.get('crashed', 0)} (harness or provider errors; not scored, rerun by --resume)"),
         ("Status", status),
         ("Started", summary.get("started")),
         ("Resumed", ", ".join(summary.get("resumed") or []) or "never"),
@@ -77,12 +83,13 @@ def _overview(summary: dict[str, Any]) -> str:
 def _stats(summary: dict[str, Any]) -> str:
     t = summary.get("totals", {})
     groups = [("overall", t), *t.get("by_split", {}).items()]
-    head = ["Group", "Tasks", "Attempts", "Passed", "Pass rate (mean ± std over repeats)", "pass@1", "pass@k",
+    head = ["Group", "Tasks", "Scored", "Crashed", "Passed", "Pass rate (mean ± std over repeats)", "pass@1", "pass@k",
             "Avg steps", "Avg tokens", "Avg cost", "Total cost"]
     rows = []
     for name, g in groups:
         rows.append([
-            name, g.get("tasks", 0), g.get("attempts", 0), g.get("passed", 0),
+            name, g.get("tasks", 0), g.get("scored_attempts", g.get("attempts", 0)), g.get("crashed", 0),
+            g.get("passed", 0),
             f"{g.get('pass_rate_mean', 0):.0%} ± {g.get('pass_rate_std', 0):.0%}",
             f"{g.get('pass_at_1', 0):.0%}", f"pass@{g.get('k', 1)} {g.get('pass_at_k', 0):.0%}",
             f"{g.get('average_steps', 0):.1f}", f"{g.get('average_tokens', 0):,.0f}",

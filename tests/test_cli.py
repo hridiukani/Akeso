@@ -531,3 +531,18 @@ def test_tier_probe_is_skipped_when_the_setup_is_already_wrong(fake_run, monkeyp
     out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official"])  # free tier in .env
 
     assert out.exit_code == 1 and probed == []
+
+
+def test_crashed_attempts_are_reported_separately(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_run_tasks(task_ids, **kwargs):
+        results = [result("c001_mean", Verdict.PASSED, 3, 4500, StopReason.PASSED),
+                   result("c002_shipping", Verdict.FAILED, 0, 0, StopReason.ERROR)]
+        return RunSummary(run_id="run-c", run_dir=Path("runs/run-c"), results=results, totals=summarize(results))
+
+    monkeypatch.setattr(cli, "run_tasks", fake_run_tasks)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 0, out.output
+    assert "Passed 1/1 attempts (100%), crashed 1 (not scored)" in out.output
+    assert "1 attempt(s) crashed" in out.output and "akeso run --resume run-c" in out.output

@@ -94,3 +94,19 @@ def test_report_command_reports_a_bad_labels_file(run_dir: Path) -> None:
     out = CliRunner().invoke(cli.app, ["report", "run-1", "--runs-dir", str(run_dir.parent)])
 
     assert out.exit_code == 1 and "unknown categor" in out.output
+
+
+def test_report_shows_crashed_attempts_and_why_an_official_run_is_incomplete(tmp_path: Path, monkeypatch) -> None:
+    from akeso import batch
+
+    root = tmp_path / "tasks"
+    make_task(root / "code", {"src/stats.py": BUGGY, "tests/test_stats.py": "def test(): ...\n"}, task_id="t001_fixable")
+    monkeypatch.setattr(batch, "run_agent", lambda task_dir, **kw: (_ for _ in ()).throw(RuntimeError("down")))
+    summary = run_tasks(["t001_fixable"], run_id="run-2", runs_dir=tmp_path / "runs", settings=SETTINGS,
+                        provider=ScriptedProvider([]), environment_factory=FakeFactory(checks=judge),
+                        tasks_root=root, run_type="official")
+
+    page = build_report(summary.run_dir)
+
+    assert "incomplete: 1 attempt(s) crashed and must be rerun" in page
+    assert "<th>Crashed</th>" in page

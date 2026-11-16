@@ -305,8 +305,9 @@ def _print_summary(summary: RunSummary, cost_basis: str, run_type: str) -> None:
     console.print(table)
 
     console.print(
-        f"Passed {t['passed']}/{t['attempts']} attempts ({t['pass_rate']:.0%})"
+        f"Passed {t['passed']}/{t['scored_attempts']} attempts ({t['pass_rate']:.0%})"
         + (f", tampered {t['tampered']}" if t["tampered"] else "")
+        + (f", crashed {t['crashed']} (not scored)" if t["crashed"] else "")
         + (f", stopped by the provider's token limit {t['provider_token_limit']}" if t["provider_token_limit"] else "")
         + f" | average steps {t['average_steps']:.1f}"
         + f" | total tokens {t['total_input_tokens'] + t['total_output_tokens']:,}"
@@ -324,6 +325,11 @@ def _print_summary(summary: RunSummary, cost_basis: str, run_type: str) -> None:
                           f" | average tokens {g['average_tokens']:,.0f} | total cost ${g['total_cost_usd']:.4f}",
                           soft_wrap=True)
     _print_categories(t)
+    if summary.crashed:
+        official = " An official run isn't complete until none have crashed." if run_type == "official" else ""
+        console.print(f"[yellow]{len(summary.crashed)} attempt(s) crashed[/yellow] (harness or provider errors; "
+                      f"left out of the pass rate).{official} Rerun them with: akeso run --resume {summary.run_id}",
+                      highlight=False, soft_wrap=True)
     if summary.stopped:
         console.print(f"[yellow]Stopped early[/yellow] ({summary.stopped}). {len(summary.not_run)} attempt(s) not run; "
                       f"finish them later with: akeso run --resume {summary.run_id}", highlight=False, soft_wrap=True)
