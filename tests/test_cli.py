@@ -53,8 +53,9 @@ def fake_run(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(cli, "load_settings", lambda: SETTINGS)
     monkeypatch.setattr(cli, "read_manifest", lambda: {})
     monkeypatch.setattr(cli, "image_digest", lambda: "sha256:image")
-    monkeypatch.setattr(cli.run_fingerprint, "collect", lambda settings, limits, docker_image=None: dict(
-        calls.get("fingerprint", {"harness_commit": "c" * 40, "harness_dirty": False}), docker_image=docker_image))
+    monkeypatch.setattr(cli.run_fingerprint, "collect", lambda settings, limits, mode="loop", docker_image=None: dict(
+        calls.get("fingerprint", {"harness_commit": "c" * 40, "harness_dirty": False}), docker_image=docker_image,
+        mode=mode))
     monkeypatch.setattr(cli, "check_tasks", lambda tasks, manifest: calls.get("freeze_check", FreezeCheck("fp-123")))
     monkeypatch.setattr(cli, "load_suite", fixed_suite)
     return calls
@@ -229,7 +230,7 @@ def test_official_run_shows_an_estimate_and_can_be_cancelled(fake_run, monkeypat
     out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--official"], input="n\n")
 
     assert out.exit_code == 1
-    assert "Official run of smoke: 3 task(s) x 3 repeat(s) on groq (developer tier) / openai/gpt-oss-120b." in out.output
+    assert "Official loop run of smoke: 3 task(s) x 3 repeat(s) on groq (developer tier) / openai/gpt-oss-120b." in out.output
     assert "Estimated: about" in out.output and "at list prices" in out.output
     assert "Cancelled; nothing was run." in out.output and "task_ids" not in fake_run
 
@@ -292,7 +293,7 @@ def test_trace_shows_a_later_repeat(tmp_path: Path) -> None:
     assert out.exit_code == 0 and "second attempt" in out.output
 
 
-FP = {"harness_commit": "c" * 40, "harness_dirty": False, "docker_image": "sha256:image"}
+FP = {"harness_commit": "c" * 40, "harness_dirty": False, "docker_image": "sha256:image", "mode": "loop"}
 
 
 @pytest.fixture
@@ -370,3 +371,33 @@ def test_a_run_stopped_by_the_quota_says_how_to_finish_it(fake_run, monkeypatch:
     assert out.exit_code == 0
     assert "Stopped early (quota exhausted: used up). 2 attempt(s) not run" in out.output
     assert "akeso run --resume run-q" in out.output
+
+
+def test_mode_reaches_the_runner_and_the_fingerprint(fake_run) -> None:
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--mode", "oneshot"])
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["mode"] == "oneshot" and fake_run["fingerprint"]["mode"] == "oneshot"
+    assert "oneshot mode" in out.output
+
+
+def test_loop_is_the_default_mode(fake_run) -> None:
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
+
+    assert out.exit_code == 0 and fake_run["mode"] == "loop"
+
+
+def test_an_unknown_mode_is_refused(fake_run) -> None:
+    out = runner.invoke(cli.app, ["run", "--suite", "smoke", "--mode", "twoshot"])
+
+    assert out.exit_code == 1 and "--mode must be one of: loop, oneshot" in out.output and "task_ids" not in fake_run
+
+
+def test_resume_uses_the_saved_mode(fake_run, saved_run) -> None:
+    saved_run["mode"] = "oneshot"
+    saved_run["fingerprint"]["mode"] = "oneshot"
+
+    out = runner.invoke(cli.app, ["run", "--resume", "run-old"])
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["resumed"] == "run-old" and fake_run["fingerprint"]["mode"] == "oneshot"

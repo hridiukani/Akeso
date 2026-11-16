@@ -2,6 +2,7 @@
 
     akeso run --suite smoke [--model M] [--max-steps N] [--max-cost USD] [--run-id ID] [--allow-modified]
     akeso run --suite full --official [--yes] [--repeats N]
+    akeso run --suite smoke --mode oneshot
     akeso run --resume RUN_ID [--yes]
     akeso trace RUN_ID TASK_ID [--repeat N]
     akeso validate [--suite smoke]
@@ -27,8 +28,8 @@ from rich.table import Table
 from akeso import fingerprint as run_fingerprint
 from akeso.agent import AgentResult
 from akeso.batch import (
-    ResumeError, RunSummary, load_for_resume, planned_attempts, resume_differences, resume_tasks, run_tasks,
-    split_attempts,
+    MODES, ResumeError, RunSummary, load_for_resume, planned_attempts, resume_differences, resume_tasks, run_tasks,
+    saved_mode, split_attempts,
 )
 from akeso.config import PRICES, ConfigError, Settings, load_settings
 from akeso.freeze import (
@@ -100,18 +101,23 @@ def run(
         None, "--repeats", min=1, help="Attempts per task, each in fresh sandboxes (default 1; official runs 3)."),
     resume: Optional[str] = typer.Option(
         None, "--resume", help="Finish run RUN_ID: rerun only its missing and crashed attempts, same setup."),
+    mode: Optional[str] = typer.Option(
+        None, "--mode", help="loop (default): the agent with tools; oneshot: a single model call, same grading."),
 ) -> None:
     """Run the agent on every task in a suite and print the results."""
     if resume:
         clashing = [name for name, value in (("--suite", suite), ("--model", model), ("--max-steps", max_steps),
                                              ("--max-cost", max_cost), ("--run-id", run_id), ("--repeats", repeats),
-                                             ("--official", official or None)) if value is not None]
+                                             ("--official", official or None), ("--mode", mode)) if value is not None]
         if clashing:
             _fail(f"{', '.join(clashing)} can't be used with --resume: a resumed run keeps its original setup.")
         _resume(resume, allow_modified=allow_modified, yes=yes)
         return
     if not suite:
         _fail("Pass --suite NAME (or --resume RUN_ID).")
+    mode = mode or "loop"
+    if mode not in MODES:
+        _fail(f"--mode must be one of: {', '.join(MODES)}.")
     task_ids = load_suite(suite)
     tasks = [find_task(task_id) for task_id in task_ids]  # report a bad suite before spending anything
     settings = load_settings()
@@ -122,24 +128,24 @@ def run(
         limits = replace(limits, max_steps=max_steps)
     if max_cost is not None:
         limits = replace(limits, max_cost_usd=max_cost)
-    fingerprint = run_fingerprint.collect(settings, limits, docker_image=image_digest())
+    fingerprint = run_fingerprint.collect(settings, limits, mode=mode, docker_image=image_digest())
     repeats = repeats or (OFFICIAL_REPEATS if official else 1)
     overrides = [name for name, value in (("--model", model), ("--max-steps", max_steps), ("--max-cost", max_cost))
                  if value is not None]
     check = _check_before_running(
         tasks, settings, limits, fingerprint, official=official, allow_modified=allow_modified, overrides=overrides,
         attempts=[(task_id, repeat) for repeat in range(1, repeats + 1) for task_id in task_ids], yes=yes,
-        heading=f"Official run of [bold]{suite}[/bold]: {len(task_ids)} task(s) x {repeats} repeat(s)",
+        heading=f"Official {mode} run of [bold]{suite}[/bold]: {len(task_ids)} task(s) x {repeats} repeat(s)",
     )
     freeze = {"manifest_fingerprint": check.manifest_fingerprint, "allow_modified": allow_modified,
               "modified_files": check.modified}
     run_type = "official" if official else "dev"
 
-    console.print(f"Running suite [bold]{suite}[/bold] ({len(task_ids)} tasks x {repeats} repeat(s)) on "
+    console.print(f"Running suite [bold]{suite}[/bold] ({len(task_ids)} tasks x {repeats} repeat(s), {mode} mode) on "
                   f"{settings.provider} / {settings.model} [bold]({run_type} run)[/bold]", soft_wrap=True)
     summary = run_tasks(
         task_ids, run_id=run_id, settings=settings, limits=limits, freeze=freeze,
-        fingerprint=fingerprint, run_type=run_type, repeats=repeats, on_result=_progress(repeats),
+        fingerprint=fingerprint, run_type=run_type, repeats=repeats, mode=mode, on_result=_progress(repeats),
     )
     _print_summary(summary, settings.cost_basis, run_type)
 
@@ -152,7 +158,7 @@ def _resume(run_id: str, *, allow_modified: bool, yes: bool) -> None:
         _fail(str(problem))
     settings = load_settings()
     limits = settings.limits
-    fingerprint = run_fingerprint.collect(settings, limits, docker_image=image_digest())
+    fingerprint = run_fingerprint.collect(settings, limits, mode=saved_mode(saved), docker_image=image_digest())
     changed = resume_differences(saved, fingerprint)
     if changed:
         console.print(f"[red]Error:[/red] run {run_id} can't be resumed: the setup has changed since it started, "

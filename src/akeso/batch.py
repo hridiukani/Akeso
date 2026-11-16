@@ -23,7 +23,8 @@ from akeso.config import AgentLimits, Settings, load_settings
 from akeso.grading import Verdict
 from akeso.llm.provider import Provider, get_provider
 from akeso.llm.types import QuotaExhaustedError
-from akeso.prompts import AGENT_PROMPT_VERSION
+from akeso.oneshot_agent import run_oneshot_agent
+from akeso.prompts import AGENT_PROMPT_VERSION, prompt_version
 from akeso import fingerprint as run_fingerprint
 from akeso.sandbox import DockerSandbox, cleanup_leftover_containers, image_digest
 from akeso.tasks import DEFAULT_TASKS_ROOT, find_task
@@ -31,6 +32,8 @@ from akeso.stats import mean_and_std, pass_at, solve_counts
 from akeso.trace import DEFAULT_TRACE_DIR, new_run_id, trace_path
 
 SUMMARY_FILE = "summary.json"
+
+MODES = ("loop", "oneshot")  # the agent loop, or a single model call (oneshot_agent.py)
 
 # Resuming needs the same experiment and the same code: every fingerprint field.
 RESUME_FIELDS = run_fingerprint.EXPERIMENT_FIELDS + ("harness_commit", "harness_dirty")
@@ -67,6 +70,7 @@ def run_tasks(
     fingerprint: dict[str, Any] | None = None,
     run_type: str = "dev",
     repeats: int = 1,
+    mode: str = "loop",
 ) -> RunSummary:
     """Run each task `repeats` times, each attempt in fresh sandboxes, and write the run
     folder. The suite is run once per repeat (repeat 1 for every task, then repeat 2, ...),
@@ -74,6 +78,8 @@ def run_tasks(
     error result rather than stopping the run."""
     if repeats < 1:
         raise ValueError("repeats must be at least 1")
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
     tasks = [find_task(task_id, tasks_root) for task_id in task_ids]  # fail fast on a bad id
     settings = settings or load_settings()
     limits = limits or settings.limits
@@ -86,12 +92,13 @@ def run_tasks(
         cleanup_leftover_containers()
     if fingerprint is None:
         docker_image = image_digest() if environment_factory is DockerSandbox else None
-        fingerprint = run_fingerprint.collect(settings, limits, docker_image=docker_image)
+        fingerprint = run_fingerprint.collect(settings, limits, mode=mode, docker_image=docker_image)
 
     header = {
         "run_id": run_id,
         "run_type": run_type,  # "official" (reportable) or "dev"
         "repeats": repeats,  # attempts planned per task
+        "mode": mode,
         "task_ids": [task.id for task in tasks],
         "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "resumed": [],
@@ -133,6 +140,7 @@ def resume_tasks(
     for task_id, repeat in todo:  # traces are appended to, so clear any partial one first
         trace_path(Path(runs_dir), run_id, task_id, repeat).unlink(missing_ok=True)
     header = {name: saved.get(name) for name in ("run_id", "run_type", "repeats", "started", "freeze", "fingerprint")}
+    header["mode"] = saved_mode(saved)
     header["task_ids"] = list(tasks)
     header["resumed"] = [*(saved.get("resumed") or []), datetime.now(timezone.utc).isoformat(timespec="seconds")]
     provider = provider or get_provider(settings)
@@ -156,6 +164,11 @@ def resume_differences(saved: dict[str, Any], fingerprint: dict[str, Any]) -> li
     then = saved.get("fingerprint") or {}
     return [f"{name}: {then.get(name)!r} then, {fingerprint.get(name)!r} now"
             for name in run_fingerprint.differences(then, fingerprint, RESUME_FIELDS)]
+
+
+def saved_mode(saved: dict[str, Any]) -> str:
+    """The mode a saved run used (runs from before modes existed were all loop runs)."""
+    return saved.get("mode") or (saved.get("fingerprint") or {}).get("mode") or "loop"
 
 
 def planned_attempts(saved: dict[str, Any]) -> list[Attempt]:
@@ -193,12 +206,13 @@ def _run_attempts(
     after each one. Stops early, listing what's left as not run, if the quota runs out."""
     splits = {task_id: task.spec.split for task_id, task in tasks.items()}
     run_id = header["run_id"]
+    runner = run_oneshot_agent if header["mode"] == "oneshot" else run_agent
     not_run: list[Attempt] = []
     stopped = None
     _write_summary(run_dir, header, settings, limits, results, splits, list(todo), None)
     for index, (task_id, repeat) in enumerate(todo):
         try:
-            result = run_agent(
+            result = runner(
                 tasks[task_id].root, settings=settings, provider=provider, limits=limits,
                 environment_factory=environment_factory, run_id=run_id, trace_dir=runs_dir, repeat=repeat,
             )
@@ -206,7 +220,8 @@ def _run_attempts(
             not_run, stopped = list(todo[index:]), f"quota exhausted: {problem}"
             break
         except Exception as problem:  # e.g. Docker went away: record it and carry on
-            result = _error_result(task_id, settings, run_id, f"{type(problem).__name__}: {problem}", repeat)
+            result = _error_result(task_id, settings, run_id, f"{type(problem).__name__}: {problem}", repeat,
+                                   prompt_version(header["mode"]))
         results.append(result)
         if on_result:
             on_result(result)
@@ -282,11 +297,11 @@ def _write_summary(
     """While a run is going, not_run lists what's still to do, so a run that dies outright
     (killed, power cut) can be resumed too."""
     summary = {
-        **{name: header[name] for name in ("run_id", "run_type", "repeats", "task_ids", "started", "resumed")},
+        **{name: header[name] for name in ("run_id", "run_type", "repeats", "mode", "task_ids", "started", "resumed")},
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "provider": settings.provider,
         "model": settings.model,
-        "prompt_version": AGENT_PROMPT_VERSION,
+        "prompt_version": prompt_version(header["mode"]),
         "freeze": header["freeze"],
         "fingerprint": header["fingerprint"],
         "cost_basis": settings.cost_basis,
@@ -303,11 +318,13 @@ def _write_summary(
     temporary.replace(run_dir / SUMMARY_FILE)
 
 
-def _error_result(task_id: str, settings: Settings, run_id: str, detail: str, repeat: int = 1) -> AgentResult:
+def _error_result(
+    task_id: str, settings: Settings, run_id: str, detail: str, repeat: int = 1, prompt: str = AGENT_PROMPT_VERSION,
+) -> AgentResult:
     return AgentResult(
         repeat=repeat,
         task_id=task_id, passed=False, verdict=Verdict.FAILED, stop_reason=StopReason.ERROR,
         steps=0, input_tokens=0, output_tokens=0, cost_usd=0.0,
         provider=settings.provider, model=settings.model, environment="unknown",
-        prompt_version=AGENT_PROMPT_VERSION, detail=detail, run_id=run_id,
+        prompt_version=prompt, detail=detail, run_id=run_id,
     )

@@ -17,7 +17,7 @@ from typing import Any
 
 from akeso.config import AgentLimits, Settings
 from akeso.freeze import DEFAULT_MANIFEST, FreezeError, read_manifest
-from akeso.prompts import AGENT_PROMPT_VERSION
+from akeso.prompts import prompt_version
 
 # Fields that define the experiment. The harness commit and dirty flag are recorded but
 # not part of it: a fix to, say, the report generator doesn't change what was measured.
@@ -43,7 +43,7 @@ def collect(
         "tier": settings.tier,
         "model": settings.model,
         "model_settings": asdict(settings.model_settings),
-        "prompt_version": AGENT_PROMPT_VERSION,
+        "prompt_version": prompt_version(mode),
         "limits": asdict(limits),
         "mode": mode,
         "docker_image": docker_image,

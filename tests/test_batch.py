@@ -303,3 +303,33 @@ def test_results_survive_the_round_trip_through_summary_json(tasks_root: Path, t
 
     saved = read_summary(summary.run_dir)["results"][0]
     assert batch.result_from_dict(saved) == summary.results[0]
+
+
+ONESHOT_FIX = "<<<FILE: src/stats.py>>>\ndef mean(n):\n    return sum(n) / len(n)\n<<<END FILE>>>"
+
+
+def test_oneshot_mode_runs_each_attempt_with_one_call(tasks_root: Path, tmp_path: Path) -> None:
+    summary = run(tasks_root, tmp_path, [text_reply(ONESHOT_FIX), text_reply("no idea")], mode="oneshot")
+
+    assert [(r.task_id, r.passed, r.steps, r.stop_reason.value) for r in summary.results] == [
+        ("t001_fixable", True, 1, "passed"), ("t002_hopeless", False, 1, "edit_failed")]
+    data = read_summary(summary.run_dir)
+    assert data["mode"] == "oneshot" and data["prompt_version"] == "oneshot-v1"
+    assert data["fingerprint"]["mode"] == "oneshot" and data["fingerprint"]["prompt_version"] == "oneshot-v1"
+
+
+def test_resume_keeps_the_runs_mode(tasks_root: Path, tmp_path: Path) -> None:
+    run_tasks(["t001_fixable"], run_id="run-1", runs_dir=tmp_path / "runs", settings=SETTINGS,
+              provider=QuotaAfter([]), environment_factory=FakeFactory(checks=judge), tasks_root=tasks_root,
+              fingerprint=FINGERPRINT, mode="oneshot")
+
+    summary = batch.resume_tasks("run-1", fingerprint=FINGERPRINT, runs_dir=tmp_path / "runs", settings=SETTINGS,
+                                 provider=ScriptedProvider([text_reply(ONESHOT_FIX)]),
+                                 environment_factory=FakeFactory(checks=judge), tasks_root=tasks_root)
+
+    assert summary.results[0].prompt_version == "oneshot-v1" and summary.results[0].passed
+
+
+def test_an_unknown_mode_is_refused(tasks_root: Path, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="mode must be one of"):
+        run(tasks_root, tmp_path, [], mode="twoshot")
