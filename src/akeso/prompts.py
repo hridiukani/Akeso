@@ -102,6 +102,67 @@ def system_prompt(task_kind: str) -> str:
     return SQL_SYSTEM_PROMPT if task_kind == "sql" else AGENT_SYSTEM_PROMPT
 
 
+# One-shot mode: one model call, no tools. The model sees the files it needs up front and
+# replies with whole files. Versioned separately from the loop's prompts.
+# v1: first version.
+ONESHOT_PROMPT_VERSION = "oneshot-v1"
+
+# Unusual markers rather than ``` fences, because file contents can contain fences.
+FILE_START = "<<<FILE: "
+FILE_END = "<<<END FILE>>>"
+
+_REPLY_FORMAT = f"""Reply with the complete corrected contents of every file you change, each in exactly
+this format, and nothing else:
+
+{FILE_START}path/to/file>>>
+<the complete file contents>
+{FILE_END}"""
+
+ONESHOT_CODE_SYSTEM_PROMPT = f"""\
+You are a careful software engineer fixing a bug in a small Python project.
+The project's tests are failing. You get one chance: there are no tools and no second turn.
+The first message gives the README, the folders you may change, every file in them and in
+tests/, and the failing test output.
+
+Rules:
+- Change only files inside the editable folders. Never change tests or test configuration;
+  your changes are graded with the original tests plus extra hidden tests, and changes
+  outside the editable folders are recorded as tampering and count as a failure.
+- Fix the real bug for every input the README describes; don't special-case the inputs
+  used by the visible tests. A bug can involve more than one file.
+- Change only what is needed to fix the bug.
+
+{_REPLY_FORMAT}"""
+
+ONESHOT_SQL_SYSTEM_PROMPT = f"""\
+You are a careful data analyst fixing a broken SQL query.
+The query in solution.sql should answer a question about a SQLite database, but its result
+is wrong. You get one chance: there are no tools and no second turn. The first message
+gives the question, the date it is asked on ("as of"), the database schema, the README,
+how the current solution.sql fails, and solution.sql itself.
+
+Rules:
+- Only solution.sql may be changed, and it must hold a single SELECT query (WITH ... SELECT
+  is fine).
+- Answer the question for any data with this schema: solution.sql is graded on this
+  database and on a second, hidden database with different data. Never hardcode values;
+  compute everything from the tables.
+- Use the as-of date for anything relative to "today"; never date('now') or CURRENT_DATE.
+- Pay attention to joins that repeat rows, NULLs, and the exact ends of date ranges.
+
+{_REPLY_FORMAT}"""
+
+
+def oneshot_system_prompt(task_kind: str) -> str:
+    """The one-shot system prompt for a kind of task ("code" or "sql")."""
+    return ONESHOT_SQL_SYSTEM_PROMPT if task_kind == "sql" else ONESHOT_CODE_SYSTEM_PROMPT
+
+
+def prompt_version(mode: str) -> str:
+    """The prompt version a run in this mode ("loop" or "oneshot") uses."""
+    return ONESHOT_PROMPT_VERSION if mode == "oneshot" else AGENT_PROMPT_VERSION
+
+
 def build_sql_first_message(
     readme: str | None, question: str, as_of: str, schema: str, comparison_rules: str, failing_output: str
 ) -> str:

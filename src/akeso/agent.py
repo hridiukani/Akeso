@@ -47,6 +47,10 @@ class StopReason(str, Enum):
     # Always counted as a failure, whatever grading says about the changes made so far.
     PROVIDER_TOKEN_LIMIT = "provider_token_limit"
     ERROR = "error"
+    # One-shot mode only (see oneshot_agent.py): the reply couldn't be applied (no file
+    # blocks, or an unsafe path), or it was applied and that was the one attempt.
+    EDIT_FAILED = "edit_failed"
+    ONE_SHOT = "one_shot"
 
 
 @dataclass(frozen=True)
