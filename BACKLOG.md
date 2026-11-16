@@ -6,15 +6,8 @@ the engineering list.
 
 ## Measurement topic
 
-- **`akeso run --resume`.** Rerun only the missing, crashed or quota-stopped tasks in an
-  existing run folder, instead of starting a long suite again. On the free tier it's what
-  lets a full run (about 600,000 tokens) be spread over the 200,000-tokens-a-day limit
-  (the calibration ran as three chunks under three run ids by hand); on the Developer tier
-  it's still what saves a long official run after a crash or an outage.
-- **Stop cleanly when the quota runs out.** A daily-cap 429 says "try again in 13
-  minutes", but each remaining task retries for about 2 minutes and then errors (17 tasks
-  in the first calibration run). Stop the run instead, record the remaining tasks as not
-  run (not as failures), and let `--resume` pick them up.
+(Nothing open: the rest of Topic 9 is tracked in its spec.)
+
 ## Polish topic
 
 - **`akeso doctor`.** One command that checks what a long run needs before it starts:
@@ -91,6 +84,14 @@ have recovered.
   harness commit and dirty flag.
 - **Record pacing waits per task and per run.** Done (step 9.2): count and seconds, per
   task and in the run totals.
+- **`akeso run --resume`.** Done (step 9.5): reruns only the missing and crashed attempts
+  of a run, keeps every other result, and refuses if any fingerprint field (including the
+  harness commit) has changed. An official run is checked against the measurement setup
+  again before resuming.
+- **Stop cleanly when the quota runs out.** Done (step 9.5): a 429 asking for a wait over
+  two minutes (such as the daily cap's "try again in 13m") stops the run at once; the
+  attempts left are recorded as not run, not as failures, and the end-of-run message gives
+  the `--resume` command.
 
 ## Done in Topic 8 (the full suite)
 
@@ -105,7 +106,7 @@ have recovered.
   and tested offline only: the MVP measures on Groq's gpt-oss-120b, so nothing has run on it.
 - **Mind Groq's daily limits.** Done (step 8.7): the binding limit turned out to be 200,000
   tokens per day, not the 1,000 requests; the calibration ran in three chunks across days.
-  Running official measurements within it is now part of `akeso run --resume` above.
+  Spreading a run over several days is now `akeso run --resume` (Topic 9).
 - **Harder SQL tasks.** Done (steps 8.5 and 8.6): s003 to s014 add `= NULL`, WHERE vs
   HAVING, a LEFT JOIN undone by WHERE, annual plans spread over months, latest row per
   group, customer-level churn, join fan-out, NULL arithmetic with duplicated lines, integer
