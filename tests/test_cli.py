@@ -451,3 +451,48 @@ def test_run_prints_the_failure_categories(fake_run, monkeypatch: pytest.MonkeyP
     out = runner.invoke(cli.app, ["run", "--suite", "smoke"])
 
     assert out.exit_code == 0 and "Failure categories (failed attempts):" in out.output and "max_steps" in out.output
+
+
+def test_a_dev_run_refuses_held_out_tasks(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_suite", lambda name: ["c001_mean", "c004_duration"])
+
+    out = runner.invoke(cli.app, ["run", "--suite", "mixed"])
+
+    assert out.exit_code == 1 and "1 held-out task(s) in a dev run: c004_duration" in out.output
+    assert "--include-heldout" in out.output and "task_ids" not in fake_run
+
+
+def test_include_heldout_lets_a_dev_run_use_them(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_suite", lambda name: ["c001_mean", "c004_duration"])
+
+    out = runner.invoke(cli.app, ["run", "--suite", "mixed", "--include-heldout"])
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["task_ids"] == ["c001_mean", "c004_duration"] and fake_run["run_type"] == "dev"
+
+
+def test_official_runs_include_held_out_tasks(fake_run, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "load_suite", lambda name: ["c001_mean", "c004_duration"])
+    monkeypatch.setattr(cli, "load_settings", lambda: DEVELOPER)
+
+    out = runner.invoke(cli.app, ["run", "--suite", "full", "--official", "--yes"])
+
+    assert out.exit_code == 0, out.output
+    assert fake_run["run_type"] == "official"
+
+
+def test_resuming_a_dev_run_refuses_held_out_tasks(fake_run, saved_run) -> None:
+    saved_run["task_ids"] = ["c001_mean", "c005_calendar"]
+
+    refused = runner.invoke(cli.app, ["run", "--resume", "run-old"])
+    allowed = runner.invoke(cli.app, ["run", "--resume", "run-old", "--include-heldout"])
+
+    assert refused.exit_code == 1 and "c005_calendar" in refused.output
+    assert allowed.exit_code == 0, allowed.output
+    assert fake_run["resumed"] == "run-old"
+
+
+def test_the_smoke_suite_is_dev_only() -> None:
+    from akeso.tasks import find_task
+
+    assert {find_task(task_id).spec.split for task_id in load_suite("smoke")} == {"dev"}

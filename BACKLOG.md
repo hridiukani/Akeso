@@ -6,7 +6,14 @@ the engineering list.
 
 ## Measurement topic
 
-(Nothing open: the rest of Topic 9 is tracked in its spec.)
+- **Note: the Topic 9 rehearsal ran two held-out tasks.** The smoke suite then included
+  c004_duration and c005_calendar, so the free-tier rehearsal runs (rehearsal-loop,
+  rehearsal-oneshot, rehearsal-oneshot-2) attempted them before the held-out rule existed.
+  Both passed every time, and nothing (prompts, tools, limits) was tuned on them. The one
+  change made after seeing their replies, accepting a one-shot file header without its
+  closing `>>>`, fixed a reply format that broke all five code tasks alike (three of them
+  dev); it isn't specific to either task. Smoke is now dev-only (c010 and s011 replace them) and dev runs
+  refuse held-out tasks without `--include-heldout`.
 
 ## Polish topic
 

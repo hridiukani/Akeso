@@ -68,3 +68,6 @@ LEARNING.md is for me, preparing to explain Akeso to two audiences: a non-techni
 
 ## Measurement rule
 The measurement model for the MVP is Groq's `openai/gpt-oss-120b` (PROVIDER=groq, GROQ_MODEL=openai/gpt-oss-120b), on Groq's Developer tier. Development and debugging stay on the free tier. Developer tier upgrades are temporarily unavailable, so no official runs happen until the Developer tier is active. All official numbers (baseline, experiments, held-out results) come from this exact model on the Developer tier with identical settings. If we switch measurement models later, every official measurement must be rerun on the new model. Results from different providers or models are never compared as if they were the same experiment.
+
+## Held-out protection
+The suite is frozen and split into dev and held-out tasks. After the freeze, dev (non-official) runs never include held-out tasks: they are only run by official runs, and nothing is tuned on them. `akeso run` refuses a dev run that includes a held-out task unless `--include-heldout` is passed; don't pass it without my explicit go-ahead. The smoke suite is dev-only.

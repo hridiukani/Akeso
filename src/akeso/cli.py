@@ -3,6 +3,7 @@
     akeso run --suite smoke [--model M] [--max-steps N] [--max-cost USD] [--run-id ID] [--allow-modified]
     akeso run --suite full --official [--yes] [--repeats N]
     akeso run --suite smoke --mode oneshot
+    akeso run --suite full --include-heldout   (a dev run that may include held-out tasks)
     akeso run --resume RUN_ID [--yes]
     akeso compare RUN_A RUN_B
     akeso report RUN_ID
@@ -108,6 +109,8 @@ def run(
         None, "--resume", help="Finish run RUN_ID: rerun only its missing and crashed attempts, same setup."),
     mode: Optional[str] = typer.Option(
         None, "--mode", help="loop (default): the agent with tools; oneshot: a single model call, same grading."),
+    include_heldout: bool = typer.Option(
+        False, "--include-heldout", help="Let a dev (non-official) run include held-out tasks."),
 ) -> None:
     """Run the agent on every task in a suite and print the results."""
     if resume:
@@ -116,7 +119,7 @@ def run(
                                              ("--official", official or None), ("--mode", mode)) if value is not None]
         if clashing:
             _fail(f"{', '.join(clashing)} can't be used with --resume: a resumed run keeps its original setup.")
-        _resume(resume, allow_modified=allow_modified, yes=yes)
+        _resume(resume, allow_modified=allow_modified, yes=yes, include_heldout=include_heldout)
         return
     if not suite:
         _fail("Pass --suite NAME (or --resume RUN_ID).")
@@ -125,6 +128,8 @@ def run(
         _fail(f"--mode must be one of: {', '.join(MODES)}.")
     task_ids = load_suite(suite)
     tasks = [find_task(task_id) for task_id in task_ids]  # report a bad suite before spending anything
+    if not official:
+        _refuse_heldout(tasks, include_heldout)
     settings = load_settings()
     if model:
         settings = _with_model(settings, model)
@@ -155,7 +160,7 @@ def run(
     _print_summary(summary, settings.cost_basis, run_type)
 
 
-def _resume(run_id: str, *, allow_modified: bool, yes: bool) -> None:
+def _resume(run_id: str, *, allow_modified: bool, yes: bool, include_heldout: bool = False) -> None:
     """akeso run --resume RUN_ID: the same checks as a fresh run, against the run's own setup."""
     try:
         saved = load_for_resume(run_id, DEFAULT_TRACE_DIR)
@@ -178,6 +183,8 @@ def _resume(run_id: str, *, allow_modified: bool, yes: bool) -> None:
     run_type = saved.get("run_type") or "dev"
     task_ids = list(dict.fromkeys(task_id for task_id, _ in planned_attempts(saved)))
     tasks = [find_task(task_id) for task_id in task_ids]
+    if run_type != "official":
+        _refuse_heldout(tasks, include_heldout)
     allow_modified = allow_modified or bool((saved.get("freeze") or {}).get("allow_modified"))
     _check_before_running(
         tasks, settings, limits, fingerprint, official=run_type == "official", allow_modified=allow_modified,
@@ -189,6 +196,15 @@ def _resume(run_id: str, *, allow_modified: bool, yes: bool) -> None:
     summary = resume_tasks(run_id, fingerprint=fingerprint, settings=settings, limits=limits,
                            on_result=_progress(repeats))
     _print_summary(summary, settings.cost_basis, run_type)
+
+
+def _refuse_heldout(tasks: list[Any], include_heldout: bool) -> None:
+    """Held-out tasks are for official runs: a dev run that touches them risks tuning on
+    them, so it needs --include-heldout."""
+    heldout = [task.id for task in tasks if task.spec.split == "heldout"]
+    if heldout and not include_heldout:
+        _fail(f"{len(heldout)} held-out task(s) in a dev run: {', '.join(heldout)}. Held-out tasks are kept for "
+              "official runs; pass --include-heldout to run them anyway.")
 
 
 def _check_before_running(
